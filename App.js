@@ -1,18 +1,50 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   TextInput,
   ScrollView,
   TouchableOpacity,
+  Image,
+  ActivityIndicator,
   StyleSheet,
   StatusBar
 } from "react-native";
+import { supabase } from "./supabase";
 
 export default function App() {
   const [search, setSearch] = useState("");
+  const [books, setBooks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const categories = ["Duka", "Soyayya", "Tarihi", "Rayuwa", "Abin al'ajabi"];
+  useEffect(() => {
+    loadBooks();
+  }, []);
+
+  async function loadBooks() {
+    setLoading(true);
+    setError("");
+
+    const { data, error } = await supabase
+      .from("books")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setError("An samu matsala wajen kawo littattafai.");
+    } else {
+      setBooks(data || []);
+    }
+
+    setLoading(false);
+  }
+
+  const filteredBooks = books.filter((book) =>
+    `${book.title || ""} ${book.author || ""}`
+      .toLowerCase()
+      .includes(search.toLowerCase())
+  );
 
   return (
     <View style={styles.container}>
@@ -24,37 +56,55 @@ export default function App() {
         <Text style={styles.welcome}>Barka da zuwa ɗakin karatunmu</Text>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView>
         <View style={styles.content}>
           <Text style={styles.heading}>Nemo littafinka</Text>
 
           <TextInput
             style={styles.search}
-            placeholder="Rubuta sunan novel..."
-            placeholderTextColor="#888"
+            placeholder="Rubuta sunan novel ko marubuci..."
             value={search}
             onChangeText={setSearch}
           />
 
-          <Text style={styles.section}>RUKUNAN LITTATTAFAI</Text>
+          <Text style={styles.section}>LITTATTAFAI</Text>
 
-          <View style={styles.categories}>
-            {categories.map((item) => (
-              <TouchableOpacity key={item} style={styles.category}>
-                <Text style={styles.categoryText}>{item}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={styles.section}>SABABBIN LITTATTAFAI</Text>
-
-          <View style={styles.empty}>
-            <Text style={styles.bookIcon}>📚</Text>
-            <Text style={styles.emptyTitle}>Babu littattafai tukuna</Text>
-            <Text style={styles.emptyText}>
-              Za a nuna novels a nan bayan Admin ya loda su.
+          {loading ? (
+            <ActivityIndicator size="large" color="#102B24" />
+          ) : error ? (
+            <Text style={styles.message}>{error}</Text>
+          ) : filteredBooks.length === 0 ? (
+            <Text style={styles.message}>
+              Babu littafi a yanzu. Za a nuna littattafai bayan Admin ya loda su.
             </Text>
-          </View>
+          ) : (
+            filteredBooks.map((book) => (
+              <View key={book.id} style={styles.book}>
+                {book.cover_image_url ? (
+                  <Image
+                    source={{ uri: book.cover_image_url }}
+                    style={styles.cover}
+                  />
+                ) : (
+                  <Text style={styles.bookIcon}>📚</Text>
+                )}
+
+                <View style={styles.bookInfo}>
+                  <Text style={styles.bookTitle}>{book.title}</Text>
+                  <Text style={styles.author}>{book.author}</Text>
+                  <Text style={styles.price}>
+                    {book.is_paid
+                      ? `₦${book.price || 0}`
+                      : "Kyauta"}
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
+
+          <TouchableOpacity style={styles.refresh} onPress={loadBooks}>
+            <Text style={styles.refreshText}>Sabunta littattafai</Text>
+          </TouchableOpacity>
 
           <Text style={styles.footer}>© ASHMAN NOVEL LIBRARY</Text>
         </View>
@@ -89,34 +139,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "bold",
     color: "#102B24",
-    marginBottom: 15,
-    marginTop: 10
+    marginBottom: 15
   },
-  categories: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
-  category: {
-    backgroundColor: "#DCE9E1",
-    padding: 12,
-    borderRadius: 20
-  },
-  categoryText: { color: "#102B24", fontWeight: "600" },
-  empty: {
+  message: { color: "#777", textAlign: "center", marginVertical: 25 },
+  book: {
     backgroundColor: "#FFFFFF",
-    padding: 30,
-    borderRadius: 15,
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+    flexDirection: "row",
     alignItems: "center"
   },
-  bookIcon: { fontSize: 40 },
-  emptyTitle: {
-    fontSize: 17,
-    fontWeight: "bold",
-    color: "#102B24",
-    marginTop: 12
+  cover: { width: 65, height: 90, borderRadius: 7 },
+  bookIcon: { fontSize: 40, width: 65, textAlign: "center" },
+  bookInfo: { marginLeft: 14, flex: 1 },
+  bookTitle: { fontSize: 16, fontWeight: "bold", color: "#102B24" },
+  author: { color: "#777", marginTop: 5 },
+  price: { color: "#B18A3B", fontWeight: "bold", marginTop: 8 },
+  refresh: {
+    backgroundColor: "#102B24",
+    padding: 14,
+    borderRadius: 10,
+    marginTop: 15
   },
-  emptyText: { color: "#777", textAlign: "center", marginTop: 8 },
-  footer: {
-    textAlign: "center",
-    color: "#888",
-    marginTop: 35,
-    marginBottom: 25
-  }
+  refreshText: { color: "#FFFFFF", textAlign: "center", fontWeight: "bold" },
+  footer: { textAlign: "center", color: "#888", marginVertical: 30 }
 });
