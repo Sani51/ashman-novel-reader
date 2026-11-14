@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "ASHMAN NOVEL LIBRARY",
+    "slug": "ashman-novel-reader",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "com.ashman.novellibrary",
+      "versionCode": 1
+    }
+  }
+}
