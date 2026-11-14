@@ -1,0 +1,4 @@
+export const SUPABASE_URL = "https://cuwesalliqhsbidmqota.supabase.co";
+
+export const SUPABASE_ANON_KEY =
+  "sb_publishable_VpPI0bDM_YQBH9dBVQx_ow_lfsinbVI";
