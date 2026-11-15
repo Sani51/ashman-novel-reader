@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import {
   View, Text, TextInput, ScrollView, TouchableOpacity,
@@ -97,26 +96,35 @@ export default function App() {
           <Text style={styles.subtitle}>NOVEL LIBRARY</Text>
           <Text style={styles.welcome}>Admin Login</Text>
         </View>
+
         <View style={styles.content}>
           <Text style={styles.heading}>Shiga asusun Admin</Text>
+
+          <Text style={styles.fieldLabel}>Email</Text>
           <TextInput
             style={styles.input}
-            placeholder="Email"
+            placeholder="Shigar da email"
+            placeholderTextColor="#777777"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
           />
+
+          <Text style={styles.fieldLabel}>Password</Text>
           <TextInput
             style={styles.input}
-            placeholder="Password"
+            placeholder="Shigar da password"
+            placeholderTextColor="#777777"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
           />
+
           <TouchableOpacity style={styles.button} onPress={login}>
             <Text style={styles.buttonText}>Shiga</Text>
           </TouchableOpacity>
+
           <Text style={styles.message}>{message}</Text>
         </View>
       </View>
@@ -137,6 +145,7 @@ export default function App() {
   return (
     <View style={styles.container}>
       <StatusBar backgroundColor="#102B24" barStyle="light-content" />
+
       <View style={styles.header}>
         <Text style={styles.logo}>ASHMAN</Text>
         <Text style={styles.subtitle}>ADMIN DASHBOARD</Text>
@@ -146,34 +155,81 @@ export default function App() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.heading}>Ƙara sabon littafi</Text>
 
-        <TextInput style={styles.input} placeholder="Sunan littafi"
-          value={title} onChangeText={setTitle} />
-        <TextInput style={styles.input} placeholder="Sunan marubuci"
-          value={author} onChangeText={setAuthor} />
-        <TextInput style={styles.input} placeholder="Category"
-          value={category} onChangeText={setCategory} />
-        <TextInput style={[styles.input, styles.description]}
-          placeholder="Bayanin littafi" value={description}
-          onChangeText={setDescription} multiline />
+        <Text style={styles.fieldLabel}>
+          Book Title – Sunan littafi *
+        </Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Rubuta sunan littafi"
+          placeholderTextColor="#777777"
+          value={title}
+          onChangeText={setTitle}
+        />
 
-        <Text style={styles.label}>Nau'in littafi</Text>
+        <Text style={styles.fieldLabel}>
+          Author Name – Sunan marubuci *
+        </Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Rubuta sunan marubuci"
+          placeholderTextColor="#777777"
+          value={author}
+          onChangeText={setAuthor}
+        />
+
+        <Text style={styles.fieldLabel}>
+          Category – Rukunin littafi (Ba dole ba ne)
+        </Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Misali: Soyayya, Tarihi, Addini"
+          placeholderTextColor="#777777"
+          value={category}
+          onChangeText={setCategory}
+        />
+
+        <Text style={styles.fieldLabel}>
+          Book Description – Bayanin littafi (Ba dole ba ne)
+        </Text>
+        <TextInput
+          style={[styles.input, styles.description]}
+          placeholder="Rubuta taƙaitaccen bayanin littafi"
+          placeholderTextColor="#777777"
+          value={description}
+          onChangeText={setDescription}
+          multiline
+        />
+
+        <Text style={styles.fieldLabel}>Nau'in littafi</Text>
+
         <View style={styles.choices}>
           <TouchableOpacity
             style={[styles.choice, !isPaid && styles.selected]}
-            onPress={() => setIsPaid(false)}>
+            onPress={() => setIsPaid(false)}
+          >
             <Text style={styles.choiceText}>Kyauta</Text>
           </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.choice, isPaid && styles.selected]}
-            onPress={() => setIsPaid(true)}>
+            onPress={() => setIsPaid(true)}
+          >
             <Text style={styles.choiceText}>Mai kuɗi</Text>
           </TouchableOpacity>
         </View>
 
         {isPaid && (
-          <TextInput style={styles.input} placeholder="Farashi a Naira"
-            value={price} onChangeText={setPrice}
-            keyboardType="numeric" />
+          <>
+            <Text style={styles.fieldLabel}>Price – Farashi (₦)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Shigar da farashi a Naira"
+              placeholderTextColor="#777777"
+              value={price}
+              onChangeText={setPrice}
+              keyboardType="numeric"
+            />
+          </>
         )}
 
         <TouchableOpacity style={styles.button} onPress={addBook}>
@@ -191,28 +247,103 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5F7F5" },
+  container: {
+    flex: 1,
+    backgroundColor: "#F5F7F5"
+  },
   header: {
-    backgroundColor: "#102B24", padding: 28, paddingTop: 45,
-    borderBottomLeftRadius: 25, borderBottomRightRadius: 25
+    backgroundColor: "#102B24",
+    padding: 28,
+    paddingTop: 45,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25
   },
-  logo: { color: "#FFF", fontSize: 27, fontWeight: "bold" },
-  subtitle: { color: "#D6B56D", fontSize: 13, letterSpacing: 3 },
-  welcome: { color: "#FFF", marginTop: 20, fontSize: 17 },
-  content: { padding: 20 },
-  heading: { fontSize: 21, fontWeight: "bold", color: "#102B24", marginBottom: 18 },
+  logo: {
+    color: "#FFF",
+    fontSize: 27,
+    fontWeight: "bold"
+  },
+  subtitle: {
+    color: "#D6B56D",
+    fontSize: 13,
+    letterSpacing: 3
+  },
+  welcome: {
+    color: "#FFF",
+    marginTop: 20,
+    fontSize: 17
+  },
+  content: {
+    padding: 20,
+    paddingBottom: 40
+  },
+  heading: {
+    fontSize: 21,
+    fontWeight: "bold",
+    color: "#102B24",
+    marginBottom: 18
+  },
+  fieldLabel: {
+    color: "#102B24",
+    fontSize: 15,
+    fontWeight: "bold",
+    marginBottom: 8,
+    marginTop: 5
+  },
   input: {
-    backgroundColor: "#FFF", padding: 15, borderRadius: 10,
-    marginBottom: 13, color: "#222"
+    backgroundColor: "#FFFFFF",
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 15,
+    color: "#222222",
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "#D8DED9"
   },
-  description: { minHeight: 90, textAlignVertical: "top" },
-  label: { color: "#102B24", fontWeight: "bold", marginBottom: 10 },
-  choices: { flexDirection: "row", gap: 10, marginBottom: 15 },
-  choice: { flex: 1, padding: 14, borderRadius: 10, backgroundColor: "#DDD", alignItems: "center" },
-  selected: { backgroundColor: "#D6B56D" },
-  choiceText: { color: "#102B24", fontWeight: "bold" },
-  button: { backgroundColor: "#102B24", padding: 15, borderRadius: 10, alignItems: "center", marginTop: 8 },
-  buttonText: { color: "#FFF", fontWeight: "bold" },
-  message: { color: "#9A6B20", marginTop: 15, textAlign: "center" },
-  logout: { backgroundColor: "#8B2929", padding: 14, borderRadius: 10, alignItems: "center", marginTop: 20 }
+  description: {
+    minHeight: 100,
+    textAlignVertical: "top"
+  },
+  choices: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 15
+  },
+  choice: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: "#DDD",
+    alignItems: "center"
+  },
+  selected: {
+    backgroundColor: "#D6B56D"
+  },
+  choiceText: {
+    color: "#102B24",
+    fontWeight: "bold"
+  },
+  button: {
+    backgroundColor: "#102B24",
+    padding: 15,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 8
+  },
+  buttonText: {
+    color: "#FFF",
+    fontWeight: "bold"
+  },
+  message: {
+    color: "#9A6B20",
+    marginTop: 15,
+    textAlign: "center"
+  },
+  logout: {
+    backgroundColor: "#8B2929",
+    padding: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 20
+  }
 });
