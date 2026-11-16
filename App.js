@@ -1,26 +1,32 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  View, Text, TextInput, ScrollView, TouchableOpacity,
-  ActivityIndicator, StyleSheet, StatusBar, Linking
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  Linking,
 } from "react-native";
+import { StatusBar } from "expo-status-bar";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "./supabase";
 
 const ADMIN_ID = "3d127987-ac50-4d49-9df8-fe8e52f1c67c";
-const BUCKET = "novel-files";
 const REDIRECT_URL = "ashmannovellibrary://auth/callback";
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState("login");
+  const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isRegister, setIsRegister] = useState(false);
   const [books, setBooks] = useState([]);
-  const [message, setMessage] = useState("");
-  const [saving, setSaving] = useState(false);
 
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
@@ -34,151 +40,127 @@ export default function App() {
   const isAdmin = session?.user?.id === ADMIN_ID;
 
   useEffect(() => {
-    let active = true;
+    let mounted = true;
 
-    async function handleAuthLink(url) {
-      if (!url) return;
-
-      const match = url.match(/[?&]code=([^&]+)/);
-      if (!match) return;
-
-      const code = decodeURIComponent(match[1]);
-
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-      if (active && error) {
-        setMessage("Tabbatarwar Gmail ta samu matsala: " + error.message);
-      } else if (active && !error) {
-        setMessage("An tabbatar da email ɗinka cikin nasara.");
+    supabase.auth.getSession().then(({ data }) => {
+      if (mounted) {
+        setSession(data.session);
+        setLoading(false);
       }
-    }
-
-    const subscription = Linking.addEventListener("url", ({ url }) => {
-      handleAuthLink(url);
     });
 
-    Linking.getInitialURL().then(handleAuthLink);
-
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (!active) return;
-
-      if (error) {
-        setMessage("An kasa buɗe account: " + error.message);
-      }
-
-      setSession(data?.session || null);
-      setLoading(false);
-    });
-
-    const { data: listener } = supabase.auth.onAuthStateChange(
+    const { data: authListener } = supabase.auth.onAuthStateChange(
       (_event, newSession) => {
-        if (active) setSession(newSession);
+        if (mounted) setSession(newSession);
       }
     );
 
+    const handleUrl = async (url) => {
+      if (!url || !url.startsWith(REDIRECT_URL)) return;
+
+      try {
+        const parsed = new URL(url);
+        const code = parsed.searchParams.get("code");
+
+        if (code) {
+          await supabase.auth.exchangeCodeForSession(code);
+        }
+      } catch (error) {
+        console.log("Email verification link:", error);
+      }
+    };
+
+    Linking.getInitialURL().then(handleUrl);
+
+    const linkListener = Linking.addEventListener("url", ({ url }) => {
+      handleUrl(url);
+    });
+
     return () => {
-      active = false;
-      subscription.remove();
-      listener.subscription.unsubscribe();
+      mounted = false;
+      authListener.subscription.unsubscribe();
+      linkListener.remove();
     };
   }, []);
 
   useEffect(() => {
-    if (session && !isAdmin) loadBooks();
+    if (session) loadBooks();
   }, [session]);
 
   async function loadBooks() {
     const { data, error } = await supabase
       .from("books")
-      .select("id,title,author,category,description,is_paid,price,cover_image_url")
+      .select("*")
       .order("created_at", { ascending: false });
 
     if (error) {
-      setMessage("An kasa samun littattafai: " + error.message);
+      Alert.alert("Error", error.message);
       return;
     }
 
     setBooks(data || []);
   }
 
-  async function register() {
-    setMessage("");
-
+  async function registerOrLogin() {
     if (!email.trim() || !password) {
-      setMessage("Ka cika email da password.");
+      Alert.alert("Required", "Please enter your email and password.");
       return;
     }
 
     if (password.length < 6) {
-      setMessage("Password ya zama aƙalla haruffa 6.");
+      Alert.alert("Password", "Password must be at least 6 characters.");
       return;
     }
 
-    setSaving(true);
+    setBusy(true);
 
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        emailRedirectTo: REDIRECT_URL
+    try {
+      if (isRegister) {
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: {
+            emailRedirectTo: REDIRECT_URL,
+          },
+        });
+
+        if (error) throw error;
+
+        if (!data.session) {
+          Alert.alert(
+            "Check your email",
+            "An email confirmation link has been sent. Open it to verify your account."
+          );
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
+
+        if (error) throw error;
       }
-    });
-
-    setSaving(false);
-
-    if (error) {
-      setMessage("An samu kuskure: " + error.message);
-      return;
-    }
-
-    if (data.session) {
-      setMessage("An ƙirƙiri account. Kana iya shiga yanzu.");
-    } else {
-      setMessage(
-        "An aika saƙon tabbatarwa zuwa email ɗinka. Ka buɗe Gmail ka danna link ɗin tabbatarwa."
-      );
-    }
-
-    setMode("login");
-  }
-
-  async function login() {
-    setMessage("");
-
-    if (!email.trim() || !password) {
-      setMessage("Ka shigar da email da password.");
-      return;
-    }
-
-    setSaving(true);
-
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password
-    });
-
-    setSaving(false);
-
-    if (error) {
-      setMessage("Shiga bai yiwu ba: " + error.message);
+    } catch (error) {
+      Alert.alert("Account message", error.message);
+    } finally {
+      setBusy(false);
     }
   }
 
   async function logout() {
-    await supabase.auth.signOut();
-    setMessage("An fita daga asusu.");
-    setMode("login");
+    const { error } = await supabase.auth.signOut();
+    if (error) Alert.alert("Error", error.message);
+    setBooks([]);
   }
 
   async function choosePdf() {
     const result = await DocumentPicker.getDocumentAsync({
       type: "application/pdf",
-      copyToCacheDirectory: true
+      copyToCacheDirectory: true,
     });
 
-    if (!result.canceled) {
+    if (!result.canceled && result.assets?.length) {
       setPdf(result.assets[0]);
-      setMessage("An zaɓi PDF cikin nasara.");
     }
   }
 
@@ -187,92 +169,93 @@ export default function App() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      setMessage("Ka ba app izinin shiga hotunanka.");
+      Alert.alert("Permission", "Please allow photo library access.");
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      allowsEditing: true,
-      quality: 0.8
+      quality: 0.8,
     });
 
-    if (!result.canceled) {
+    if (!result.canceled && result.assets?.length) {
       setCover(result.assets[0]);
-      setMessage("An zaɓi hoton littafi.");
     }
   }
 
-  async function uploadFile(file, folder, contentType) {
+  async function uploadFile(file, path, contentType) {
     const response = await fetch(file.uri);
-    const arrayBuffer = await response.arrayBuffer();
-
-    const originalName = file.name || file.fileName || "file";
-    const extension = originalName.split(".").pop().toLowerCase();
-    const safeExtension = extension.replace(/[^a-z0-9]/g, "") || "bin";
-
-    const path = `${folder}/${Date.now()}-${Math.random()
-      .toString(36).slice(2)}.${safeExtension}`;
+    const blob = await response.blob();
 
     const { error } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, new Uint8Array(arrayBuffer), {
+      .from("novel-files")
+      .upload(path, blob, {
         contentType,
-        upsert: false
+        upsert: false,
       });
 
     if (error) throw error;
-
     return path;
   }
 
   async function addBook() {
-    if (!title.trim() || !author.trim()) {
-      setMessage("Ka saka sunan littafi da marubuci.");
+    if (!isAdmin) {
+      Alert.alert("Access denied", "Only the administrator can add books.");
       return;
     }
 
-    if (!pdf) {
-      setMessage("Dole ne ka zaɓi PDF na littafin.");
+    if (!title.trim() || !author.trim() || !pdf) {
+      Alert.alert(
+        "Missing information",
+        "Please enter the book title, author name, and select a PDF."
+      );
       return;
     }
 
-    if (isPaid && (!price || Number(price) <= 0)) {
-      setMessage("Ka saka farashin littafin.");
+    if (isPaid && (!price.trim() || Number(price) <= 0)) {
+      Alert.alert("Price", "Enter a valid price for this paid book.");
       return;
     }
 
-    setSaving(true);
-    setMessage("Ana loda littafi...");
+    setBusy(true);
 
     try {
-      const pdfPath = await uploadFile(
-        pdf, "pdfs", "application/pdf"
-      );
+      const timestamp = Date.now();
+      const safeTitle = title.trim().replace(/[^a-zA-Z0-9_-]/g, "_");
+
+      const pdfPath = `books/${timestamp}_${safeTitle}.pdf`;
+
+      await uploadFile(pdf, pdfPath, "application/pdf");
 
       let coverPath = null;
 
       if (cover) {
-        coverPath = await uploadFile(
-          cover, "covers", cover.mimeType || "image/jpeg"
+        const extension = cover.uri.split(".").pop()?.split("?")[0] || "jpg";
+        coverPath = `covers/${timestamp}_cover.${extension}`;
+
+        await uploadFile(
+          cover,
+          coverPath,
+          cover.mimeType || "image/jpeg"
         );
       }
 
-      const { error } = await supabase.from("books").insert([{
+      const { error } = await supabase.from("books").insert({
         title: title.trim(),
         author: author.trim(),
-        category: category.trim(),
-        description: description.trim(),
+        category: category.trim() || null,
+        description: description.trim() || null,
         file_url: pdfPath,
         cover_image_url: coverPath,
         file_type: "pdf",
         is_paid: isPaid,
-        price: isPaid ? Number(price) : 0
-      }]);
+        price: isPaid ? Number(price) : 0,
+      });
 
       if (error) throw error;
 
-      setMessage("An adana littafin cikin nasara!");
+      Alert.alert("Success", "The book has been added.");
+
       setTitle("");
       setAuthor("");
       setCategory("");
@@ -281,475 +264,433 @@ export default function App() {
       setIsPaid(false);
       setPdf(null);
       setCover(null);
+
+      loadBooks();
     } catch (error) {
-      setMessage("An samu kuskure: " + error.message);
+      Alert.alert("Upload failed", error.message);
     } finally {
-      setSaving(false);
+      setBusy(false);
+    }
+  }
+
+  async function openBook(book) {
+    if (!session) return;
+
+    if (book.is_paid) {
+      Alert.alert(
+        "Paid book",
+        "Payment verification is not yet connected to this app."
+      );
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from("novel-files")
+        .createSignedUrl(book.file_url, 300);
+
+      if (error) throw error;
+
+      await Linking.openURL(data.signedUrl);
+    } catch (error) {
+      Alert.alert("Unable to open book", error.message);
     }
   }
 
   if (loading) {
-    return <ActivityIndicator style={{ flex: 1 }} size="large" />;
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#087A45" />
+        <Text style={styles.info}>Loading ASHMAN NOVEL LIBRARY...</Text>
+      </View>
+    );
   }
 
   if (!session) {
     return (
-      <View style={styles.container}>
-        <StatusBar backgroundColor="#102B24" barStyle="light-content" />
+      <View style={styles.authPage}>
+        <StatusBar style="dark" />
 
-        <View style={styles.header}>
-          <Text style={styles.logo}>ASHMAN</Text>
-          <Text style={styles.subtitle}>NOVEL LIBRARY</Text>
-          <Text style={styles.welcome}>Karatu cikin sauƙi</Text>
-        </View>
+        <Text style={styles.logo}>📖</Text>
+        <Text style={styles.mainTitle}>ASHMAN NOVEL LIBRARY</Text>
+        <Text style={styles.subtitle}>S.Y MARUBUCI</Text>
 
-        <View style={styles.content}>
-          <Text style={styles.heading}>
-            {mode === "register" ? "Ƙirƙiri sabon account" : "Shiga account"}
-          </Text>
-
-          <Text style={styles.fieldLabel}>Email / Gmail</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Shigar da email ɗinka"
-            placeholderTextColor="#777"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-
-          <Text style={styles.fieldLabel}>Password</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Shigar da password"
-            placeholderTextColor="#777"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-
-          <TouchableOpacity
-            style={[styles.button, saving && styles.disabled]}
-            onPress={mode === "register" ? register : login}
-            disabled={saving}
-          >
-            <Text style={styles.buttonText}>
-              {saving ? "Ana jira..." :
-                mode === "register" ? "Yi rajista" : "Shiga"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.switchButton}
-            onPress={() => {
-              setMessage("");
-              setMode(mode === "register" ? "login" : "register");
-            }}
-          >
-            <Text style={styles.switchText}>
-              {mode === "register"
-                ? "Kana da account? Shiga"
-                : "Ba ka da account? Yi rajista"}
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={styles.message}>{message}</Text>
-        </View>
-      </View>
-    );
-  }
-
-  if (isAdmin) {
-    return (
-      <View style={styles.container}>
-        <StatusBar backgroundColor="#102B24" barStyle="light-content" />
-
-        <View style={styles.header}>
-          <Text style={styles.logo}>ASHMAN</Text>
-          <Text style={styles.subtitle}>ADMIN DASHBOARD</Text>
-          <Text style={styles.welcome}>Barka da zuwa, Admin</Text>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.heading}>Ƙara sabon littafi</Text>
-
-          <Text style={styles.fieldLabel}>Book Title – Sunan littafi *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Rubuta sunan littafi"
-            placeholderTextColor="#777"
-            value={title}
-            onChangeText={setTitle}
-          />
-
-          <Text style={styles.fieldLabel}>Author Name – Sunan marubuci *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Rubuta sunan marubuci"
-            placeholderTextColor="#777"
-            value={author}
-            onChangeText={setAuthor}
-          />
-
-          <Text style={styles.fieldLabel}>Category – Rukunin littafi (Ba dole ba ne)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Misali: Soyayya, Tarihi, Addini"
-            placeholderTextColor="#777"
-            value={category}
-            onChangeText={setCategory}
-          />
-
-          <Text style={styles.fieldLabel}>Book Description – Bayanin littafi (Ba dole ba ne)</Text>
-          <TextInput
-            style={[styles.input, styles.description]}
-            placeholder="Taƙaitaccen bayanin littafi"
-            placeholderTextColor="#777"
-            value={description}
-            onChangeText={setDescription}
-            multiline
-          />
-
-          <Text style={styles.fieldLabel}>Cover Image – Hoton bangon littafi</Text>
-          <TouchableOpacity style={styles.pickButton} onPress={chooseCover}>
-            <Text style={styles.pickText}>
-              {cover ? "An zaɓi hoton ✓" : "Zaɓi hoton littafi"}
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={styles.fieldLabel}>Upload PDF – Ɗora littafin PDF *</Text>
-          <TouchableOpacity style={styles.pickButton} onPress={choosePdf}>
-            <Text style={styles.pickText}>
-              {pdf ? pdf.name : "Zaɓi PDF daga wayarka"}
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={styles.fieldLabel}>Nau'in littafi</Text>
-          <View style={styles.choices}>
-            <TouchableOpacity
-              style={[styles.choice, !isPaid && styles.selected]}
-              onPress={() => setIsPaid(false)}
-            >
-              <Text style={styles.choiceText}>Kyauta</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.choice, isPaid && styles.selected]}
-              onPress={() => setIsPaid(true)}
-            >
-              <Text style={styles.choiceText}>Mai kuɗi</Text>
-            </TouchableOpacity>
-          </View>
-
-          {isPaid && (
-            <>
-              <Text style={styles.fieldLabel}>Price – Farashi (₦)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Shigar da farashi"
-                placeholderTextColor="#777"
-                value={price}
-                onChangeText={setPrice}
-                keyboardType="numeric"
-              />
-            </>
-          )}
-
-          <TouchableOpacity
-            style={[styles.button, saving && styles.disabled]}
-            onPress={addBook}
-            disabled={saving}
-          >
-            <Text style={styles.buttonText}>
-              {saving ? "Ana loda littafi..." : "Ajiye littafi"}
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={styles.message}>{message}</Text>
-
-          <TouchableOpacity style={styles.logout} onPress={logout}>
-            <Text style={styles.buttonText}>Fita daga Admin</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <StatusBar backgroundColor="#102B24" barStyle="light-content" />
-
-      <View style={styles.header}>
-        <Text style={styles.logo}>ASHMAN</Text>
-        <Text style={styles.subtitle}>NOVEL LIBRARY</Text>
-        <Text style={styles.welcome}>Barka da zuwa Library</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.heading}>Littattafanmu</Text>
-        <Text style={styles.fieldLabel}>
-          Ka zaɓi littafin da kake son karantawa.
+        <Text style={styles.authTitle}>
+          {isRegister ? "Create Account" : "Welcome Back"}
         </Text>
 
-        {books.length === 0 ? (
-          <Text style={styles.message}>Babu littattafai a yanzu.</Text>
-        ) : (
-          books.map((book) => (
-            <View key={book.id} style={styles.bookCard}>
-              <Text style={styles.bookTitle}>{book.title}</Text>
-              <Text style={styles.bookAuthor}>Marubuci: {book.author}</Text>
+        <Text style={styles.label}>Email Address / Adireshin Email</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter your email"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
 
-              {!!book.category && (
-                <Text style={styles.bookInfo}>Rukuni: {book.category}</Text>
-              )}
+        <Text style={styles.label}>Password / Kalmar sirri</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Enter your password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
 
-              {!!book.description && (
-                <Text style={styles.bookInfo}>{book.description}</Text>
-              )}
-
-              <Text style={styles.bookInfo}>
-                {book.is_paid ? `Mai kuɗi: ₦${book.price}` : "Kyauta"}
-              </Text>
-
-              <Text style={styles.bookInfo}>
-                Za a kunna karatun littafi a mataki na gaba.
-              </Text>
-            </View>
-          ))
-        )}
-
-        <TouchableOpacity style={styles.pickButton} onPress={loadBooks}>
-          <Text style={styles.pickText}>Sabunta jerin littattafai</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.message}>{message}</Text>
-
-        <TouchableOpacity style={styles.logout} onPress={logout}>
-          <Text style={styles.buttonText}>Fita daga account</Text>
-        </TouchableOpacity>
-      </ScrollView>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5F7F5" },
-  header: {
-    backgroundColor: "#102B24", padding: 28, paddingTop: 45,
-    borderBottomLeftRadius: 25, borderBottomRightRadius: 25
-  },
-  logo: { color: "#FFF", fontSize: 27, fontWeight: "bold" },
-  subtitle: { color: "#D6B56D", fontSize: 13, letterSpacing: 3 },
-  welcome: { color: "#FFF", marginTop: 20, fontSize: 17 },
-  content: { padding: 20, paddingBottom: 40 },
-  heading: {
-    fontSize: 21, fontWeight: "bold", color: "#102B24",
-    marginBottom: 18
-  },
-  fieldLabel: {
-    color: "#102B24", fontSize: 15, fontWeight: "bold",
-    marginBottom: 8, marginTop: 5
-  },
-  input: {
-    backgroundColor: "#FFF", padding: 15, borderRadius: 10,
-    marginBottom: 15, color: "#222", fontSize: 16,
-    borderWidth: 1, borderColor: "#D8DED9"
-  },
-  description: { minHeight: 100, textAlignVertical: "top" },
-  pickButton: {
-    backgroundColor: "#E5EFE9", padding: 16,
-    borderRadius: 10, marginBottom: 16,
-    borderWidth: 1, borderColor: "#A9C5B4"
-  },
-  pickText: { color: "#102B24", fontWeight: "bold" },
-  choices: { flexDirection: "row", gap: 10, marginBottom: 15 },
-  choice: {
-    flex: 1, padding: 14, borderRadius: 10,
-    backgroundColor: "#DDD", alignItems: "center"
-  },
-  selected: { backgroundColor: "#D6B56D" },
-  choiceText: { color: "#102B24", fontWeight: "bold" },
-  button: {
-    backgroundColor: "#102B24", padding: 15,
-    borderRadius: 10, alignItems: "center", marginTop: 8
-  },
-  disabled: { opacity: 0.5 },
-  buttonText: { color: "#FFF", fontWeight: "bold" },
-  message: { color: "#9A6B20", marginTop: 15, textAlign: "center" },
-  logout: {
-    backgroundColor: "#8B2929", padding: 14,
-    borderRadius: 10, alignItems: "center", marginTop: 20
-  },
-  switchButton: { padding: 14, alignItems: "center" },
-  switchText: { color: "#176B4A", fontWeight: "bold" },
-  bookCard: {
-    backgroundColor: "#FFF", padding: 16, borderRadius: 12,
-    marginBottom: 14, borderWidth: 1, borderColor: "#D8DED9"
-  },
-  bookTitle: { color: "#102B24", fontSize: 18, fontWeight: "bold" },
-  bookAuthor: { color: "#444", marginTop: 6 },
-  bookInfo: { color: "#555", marginTop: 7 }
-});
-style={styles.fieldLabel}>Cover Image – Hoton bangon littafi</Text>
-          <TouchableOpacity style={styles.pickButton} onPress={chooseCover}>
-            <Text style={styles.pickText}>
-              {cover ? "An zaɓi hoton ✓" : "Zaɓi hoton littafi"}
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={styles.fieldLabel}>Upload PDF – Ɗora littafin PDF *</Text>
-          <TouchableOpacity style={styles.pickButton} onPress={choosePdf}>
-            <Text style={styles.pickText}>
-              {pdf ? pdf.name : "Zaɓi PDF daga wayarka"}
-            </Text>
-          </TouchableOpacity>
-
-          <Text style={styles.fieldLabel}>Nau'in littafi</Text>
-          <View style={styles.choices}>
-            <TouchableOpacity
-              style={[styles.choice, !isPaid && styles.selected]}
-              onPress={() => setIsPaid(false)}>
-              <Text style={styles.choiceText}>Kyauta</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.choice, isPaid && styles.selected]}
-              onPress={() => setIsPaid(true)}>
-              <Text style={styles.choiceText}>Mai kuɗi</Text>
-            </TouchableOpacity>
-          </View>
-
-          {isPaid && (
-            <>
-              <Text style={styles.fieldLabel}>Price – Farashi (₦)</Text>
-              <TextInput style={styles.input} placeholder="Shigar da farashi"
-                placeholderTextColor="#777" value={price}
-                onChangeText={setPrice} keyboardType="numeric" />
-            </>
-          )}
-
-          <TouchableOpacity
-            style={[styles.button, saving && styles.disabled]}
-            onPress={addBook} disabled={saving}>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={registerOrLogin}
+          disabled={busy}
+        >
+          {busy ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
             <Text style={styles.buttonText}>
-              {saving ? "Ana loda littafi..." : "Ajiye littafi"}
+              {isRegister ? "Register" : "Login"}
             </Text>
-          </TouchableOpacity>
+          )}
+        </TouchableOpacity>
 
-          <Text style={styles.message}>{message}</Text>
+        <TouchableOpacity
+          onPress={() => setIsRegister(!isRegister)}
+          style={styles.switchButton}
+        >
+          <Text style={styles.switchText}>
+            {isRegister
+              ? "Already have an account? Login"
+              : "Don't have an account? Register"}
+          </Text>
+        </TouchableOpacity>
 
-          <TouchableOpacity style={styles.logout} onPress={logout}>
-            <Text style={styles.buttonText}>Fita daga Admin</Text>
-          </TouchableOpacity>
-        </ScrollView>
+        <Text style={styles.info}>
+          Registration is free. Create an account to access the library.
+        </Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar backgroundColor="#102B24" barStyle="light-content" />
+    <View style={styles.page}>
+      <StatusBar style="light" />
+
       <View style={styles.header}>
-        <Text style={styles.logo}>ASHMAN</Text>
-        <Text style={styles.subtitle}>NOVEL LIBRARY</Text>
-        <Text style={styles.welcome}>Barka da zuwa Library</Text>
+        <Text style={styles.headerTitle}>ASHMAN NOVEL LIBRARY</Text>
+        <Text style={styles.headerSubtitle}>S.Y MARUBUCI</Text>
+        <TouchableOpacity onPress={logout}>
+          <Text style={styles.logout}>Logout</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.heading}>Littattafanmu</Text>
-        <Text style={styles.fieldLabel}>Ka zaɓi littafin da kake son karantawa.</Text>
+        {isAdmin ? (
+          <View style={styles.adminBox}>
+            <Text style={styles.sectionTitle}>Admin Dashboard</Text>
+            <Text style={styles.info}>Welcome, Administrator.</Text>
+
+            <Text style={styles.label}>Book Title / Sunan littafi</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter book title"
+              value={title}
+              onChangeText={setTitle}
+            />
+
+            <Text style={styles.label}>Author Name / Sunan marubuci</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter author name"
+              value={author}
+              onChangeText={setAuthor}
+            />
+
+            <Text style={styles.label}>Category / Rukunin littafi</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Example: Romance"
+              value={category}
+              onChangeText={setCategory}
+            />
+
+            <Text style={styles.label}>
+              Book Description / Taƙaitaccen bayanin littafi
+            </Text>
+            <TextInput
+              style={[styles.input, styles.descriptionInput]}
+              placeholder="Write a short description"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+            />
+
+            <Text style={styles.label}>Upload PDF / Ɗora PDF</Text>
+            <TouchableOpacity style={styles.pickButton} onPress={choosePdf}>
+              <Text style={styles.pickText}>
+                {pdf ? pdf.name : "Choose PDF file"}
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.label}>
+              Cover Image / Hoton bangon littafi
+            </Text>
+            <TouchableOpacity style={styles.pickButton} onPress={chooseCover}>
+              <Text style={styles.pickText}>
+                {cover ? "Cover image selected" : "Choose cover image"}
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.label}>Book Type / Nau'in littafi</Text>
+            <View style={styles.typeRow}>
+              <TouchableOpacity
+                style={[styles.typeButton, !isPaid && styles.selectedType]}
+                onPress={() => setIsPaid(false)}
+              >
+                <Text style={styles.typeText}>Free / Kyauta</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.typeButton, isPaid && styles.selectedType]}
+                onPress={() => setIsPaid(true)}
+              >
+                <Text style={styles.typeText}>Paid / Na kuɗi</Text>
+              </TouchableOpacity>
+            </View>
+
+            {isPaid && (
+              <>
+                <Text style={styles.label}>Price (₦) / Farashi</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter price"
+                  value={price}
+                  onChangeText={setPrice}
+                  keyboardType="numeric"
+                />
+              </>
+            )}
+
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={addBook}
+              disabled={busy}
+            >
+              {busy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Upload Book</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Text style={styles.sectionTitle}>My Library / Laburaren littattafai</Text>
+        )}
+
+        <Text style={styles.sectionTitle}>Available Novels</Text>
 
         {books.length === 0 ? (
-          <Text style={styles.message}>Babu littattafai a yanzu.</Text>
+          <Text style={styles.info}>No books have been uploaded yet.</Text>
         ) : (
           books.map((book) => (
-            <View key={book.id} style={styles.bookCard}>
+            <View key={String(book.id)} style={styles.bookCard}>
               <Text style={styles.bookTitle}>{book.title}</Text>
-              <Text style={styles.bookAuthor}>Marubuci: {book.author}</Text>
+              <Text style={styles.bookInfo}>Author: {book.author}</Text>
               {!!book.category && (
-                <Text style={styles.bookInfo}>Rukuni: {book.category}</Text>
+                <Text style={styles.bookInfo}>Category: {book.category}</Text>
               )}
               {!!book.description && (
                 <Text style={styles.bookInfo}>{book.description}</Text>
               )}
               <Text style={styles.bookInfo}>
-                {book.is_paid ? `Mai kuɗi: ₦${book.price}` : "Kyauta"}
+                {book.is_paid ? `Paid: ₦${book.price}` : "Free"}
               </Text>
-              <Text style={styles.bookInfo}>
-                Za a kunna karatun littafi a mataki na gaba.
-              </Text>
+
+              <TouchableOpacity
+                style={styles.readButton}
+                onPress={() => openBook(book)}
+              >
+                <Text style={styles.buttonText}>
+                  {book.is_paid ? "View Book Details" : "Read Book"}
+                </Text>
+              </TouchableOpacity>
             </View>
           ))
         )}
-
-        <TouchableOpacity style={styles.pickButton} onPress={loadBooks}>
-          <Text style={styles.pickText}>Sabunta jerin littattafai</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.message}>{message}</Text>
-        <TouchableOpacity style={styles.logout} onPress={logout}>
-          <Text style={styles.buttonText}>Fita daga account</Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F5F7F5" },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+  },
+  authPage: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 24,
+    backgroundColor: "#fff",
+  },
+  page: {
+    flex: 1,
+    backgroundColor: "#F5F7F5",
+  },
   header: {
-    backgroundColor: "#102B24", padding: 28, paddingTop: 45,
-    borderBottomLeftRadius: 25, borderBottomRightRadius: 25
+    backgroundColor: "#087A45",
+    padding: 22,
+    paddingTop: 48,
   },
-  logo: { color: "#FFF", fontSize: 27, fontWeight: "bold" },
-  subtitle: { color: "#D6B56D", fontSize: 13, letterSpacing: 3 },
-  welcome: { color: "#FFF", marginTop: 20, fontSize: 17 },
-  content: { padding: 20, paddingBottom: 40 },
-  heading: {
-    fontSize: 21, fontWeight: "bold", color: "#102B24",
-    marginBottom: 18
+  headerTitle: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
   },
-  fieldLabel: {
-    color: "#102B24", fontSize: 15, fontWeight: "bold",
-    marginBottom: 8, marginTop: 5
+  headerSubtitle: {
+    color: "#F5D77B",
+    textAlign: "center",
+    marginTop: 5,
+  },
+  logout: {
+    color: "#fff",
+    textAlign: "right",
+    marginTop: 12,
+  },
+  logo: {
+    fontSize: 48,
+    textAlign: "center",
+  },
+  mainTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#087A45",
+    textAlign: "center",
+    marginTop: 10,
+  },
+  subtitle: {
+    textAlign: "center",
+    color: "#B58A24",
+    marginBottom: 30,
+  },
+  authTitle: {
+    fontSize: 22,
+    fontWeight: "bold",
+    marginBottom: 18,
+    color: "#173D2B",
+  },
+  label: {
+    fontWeight: "600",
+    color: "#263B30",
+    marginTop: 13,
+    marginBottom: 6,
   },
   input: {
-    backgroundColor: "#FFF", padding: 15, borderRadius: 10,
-    marginBottom: 15, color: "#222", fontSize: 16,
-    borderWidth: 1, borderColor: "#D8DED9"
+    borderWidth: 1,
+    borderColor: "#D5DED8",
+    borderRadius: 9,
+    padding: 12,
+    backgroundColor: "#fff",
+    color: "#222",
   },
-  description: { minHeight: 100, textAlignVertical: "top" },
+  descriptionInput: {
+    minHeight: 85,
+    textAlignVertical: "top",
+  },
+  primaryButton: {
+    backgroundColor: "#087A45",
+    padding: 15,
+    borderRadius: 9,
+    alignItems: "center",
+    marginTop: 20,
+  },
+  buttonText: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+  switchButton: {
+    alignItems: "center",
+    padding: 18,
+  },
+  switchText: {
+    color: "#087A45",
+    fontWeight: "600",
+  },
+  info: {
+    color: "#65736A",
+    textAlign: "center",
+    marginTop: 12,
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  adminBox: {
+    backgroundColor: "#fff",
+    padding: 15,
+    borderRadius: 12,
+    marginBottom: 22,
+  },
+  sectionTitle: {
+    color: "#087A45",
+    fontSize: 19,
+    fontWeight: "bold",
+    marginBottom: 12,
+    marginTop: 8,
+  },
   pickButton: {
-    backgroundColor: "#E5EFE9", padding: 16,
-    borderRadius: 10, marginBottom: 16,
-    borderWidth: 1, borderColor: "#A9C5B4"
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#087A45",
+    borderRadius: 8,
+    marginTop: 4,
   },
-  pickText: { color: "#102B24", fontWeight: "bold" },
-  choices: { flexDirection: "row", gap: 10, marginBottom: 15 },
-  choice: {
-    flex: 1, padding: 14, borderRadius: 10,
-    backgroundColor: "#DDD", alignItems: "center"
+  pickText: {
+    color: "#087A45",
+    fontWeight: "600",
   },
-  selected: { backgroundColor: "#D6B56D" },
-  choiceText: { color: "#102B24", fontWeight: "bold" },
-  button: {
-    backgroundColor: "#102B24", padding: 15,
-    borderRadius: 10, alignItems: "center", marginTop: 8
+  typeRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 5,
   },
-  disabled: { opacity: 0.5 },
-  buttonText: { color: "#FFF", fontWeight: "bold" },
-  message: { color: "#9A6B20", marginTop: 15, textAlign: "center" },
-  logout: {
-    backgroundColor: "#8B2929", padding: 14,
-    borderRadius: 10, alignItems: "center", marginTop: 20
+  typeButton: {
+    flex: 1,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#D5DED8",
+    borderRadius: 8,
+    alignItems: "center",
   },
-  switchButton: { padding: 14, alignItems: "center" },
-  switchText: { color: "#176B4A", fontWeight: "bold" },
+  selectedType: {
+    backgroundColor: "#DDF2E5",
+    borderColor: "#087A45",
+  },
+  typeText: {
+    color: "#174A30",
+    fontWeight: "600",
+  },
   bookCard: {
-    backgroundColor: "#FFF", padding: 16, borderRadius: 12,
-    marginBottom: 14, borderWidth: 1, borderColor: "#D8DED9"
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 10,
+    marginBottom: 12,
   },
-  bookTitle: { color: "#102B24", fontSize: 18, fontWeight: "bold" },
-  bookAuthor: { color: "#444", marginTop: 6 },
-  bookInfo: { color: "#555", marginTop: 7 }
+  bookTitle: {
+    fontSize: 18,
+    color: "#087A45",
+    fontWeight: "bold",
+  },
+  bookInfo: {
+    color: "#555",
+    marginTop: 7,
+  },
+  readButton: {
+    backgroundColor: "#087A45",
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+    marginTop: 12,
+  },
 });
