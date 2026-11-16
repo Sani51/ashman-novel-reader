@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "ASHMAN NOVEL LIBRARY",
@@ -5,6 +6,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "scheme": "ashmannovellibrary",
     "android": {
       "package": "com.ashman.novellibrary",
       "versionCode": 1
