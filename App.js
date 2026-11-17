@@ -715,8 +715,9 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   logout: {
-    color: "#fff",
-    textAlign: "{styles.info}>Welcome, Administrator.</Text>
+  color: "#fff",
+  textAlign: "center",
+},: "{styles.info}>Welcome, Administrator.</Text>
 
             <Text style={styles.label}>Book Title / Sunan littafi</Text>
             <TextInput
