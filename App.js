@@ -735,7 +735,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
 
- tyles.authPage}>
+ <View style={styles.authPage}>
         <StatusBar style="dark" />
         <Text style={styles.logo}>📖</Text>
         <Text style={styles.mainTitle}>ASHMAN NOVEL LIBRARY</Text>
