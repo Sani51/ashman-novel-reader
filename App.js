@@ -1,113 +1,56 @@
+
 import React, { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  Linking,
-  Modal,
-  BackHandler,
+  ActivityIndicator, Alert, FlatList, SafeAreaView,
+  ScrollView, StatusBar, StyleSheet, Text, TextInput,
+  TouchableOpacity, View
 } from "react-native";
-import { StatusBar } from "expo-status-bar";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import Pdf from "react-native-pdf";
 import { supabase } from "./supabase";
 
 const ADMIN_ID = "3d127987-ac50-4d49-9df8-fe8e52f1c67c";
-const REDIRECT_URL = "ashmannovellibrary://auth/callback";
+const BUCKET = "novel-files";
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isRegister, setIsRegister] = useState(false);
   const [books, setBooks] = useState([]);
-
+  const [busy, setBusy] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [readerUrl, setReaderUrl] = useState("");
+  const [readerText, setReaderText] = useState("");
+  const [readerPage, setReaderPage] = useState(0);
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
-  const [isPaid, setIsPaid] = useState(false);
+  const [paid, setPaid] = useState(false);
   const [bookFile, setBookFile] = useState(null);
-  const [cover, setCover] = useState(null);
-
-  const [readingBook, setReadingBook] = useState(null);
-  const [readingUrl, setReadingUrl] = useState(null);
-  const [pageNumber, setPageNumber] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
-  const [textPages, setTextPages] = useState([]);
-  const [textLoading, setTextLoading] = useState(false);
+  const [coverFile, setCoverFile] = useState(null);
 
   const isAdmin = session?.user?.id === ADMIN_ID;
 
   useEffect(() => {
-    let mounted = true;
-
     supabase.auth.getSession().then(({ data }) => {
-      if (mounted) {
-        setSession(data.session);
-        setLoading(false);
-      }
+      setSession(data.session);
+      setLoading(false);
     });
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, newSession) => {
-        if (mounted) setSession(newSession);
-      }
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, next) => setSession(next)
     );
-
-    const handleUrl = async (url) => {
-      if (!url || !url.startsWith(REDIRECT_URL)) return;
-
-      try {
-        const parsed = new URL(url);
-        const code = parsed.searchParams.get("code");
-        if (code) {
-          await supabase.auth.exchangeCodeForSession(code);
-        }
-      } catch (error) {
-        console.log("Email verification:", error);
-      }
-    };
-
-    Linking.getInitialURL().then(handleUrl);
-
-    const linkListener = Linking.addEventListener("url", ({ url }) => {
-      handleUrl(url);
-    });
-
-    return () => {
-      mounted = false;
-      authListener.subscription.unsubscribe();
-      linkListener.remove();
-    };
+    return () => listener.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
     if (session) loadBooks();
+    else setBooks([]);
   }, [session]);
-
-  useEffect(() => {
-    if (!readingBook) return;
-
-    const backListener = BackHandler.addEventListener(
-      "hardwareBackPress",
-      () => {
-        closeReader();
-        return true;
-      }
-    );
-
-    return () => backListener.remove();
-  }, [readingBook]);
 
   async function loadBooks() {
     const { data, error } = await supabase
@@ -115,35 +58,24 @@ export default function App() {
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (error) {
-      Alert.alert("Error", error.message);
-      return;
-    }
-
-    setBooks(data || []);
+    if (error) Alert.alert("Library error", error.message);
+    else setBooks(data || []);
   }
 
-  async function registerOrLogin() {
+  async function authenticate() {
     if (!email.trim() || !password) {
-      Alert.alert("Required", "Enter your email and password.");
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert("Password", "Password must be at least 6 characters.");
-      return;
+      return Alert.alert("Missing details", "Enter your email and password.");
     }
 
     setBusy(true);
-
     try {
       if (isRegister) {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
           options: {
-            emailRedirectTo: REDIRECT_URL,
-          },
+            emailRedirectTo: "ashmannovellibrary://auth/callback"
+          }
         });
 
         if (error) throw error;
@@ -151,43 +83,42 @@ export default function App() {
         if (!data.session) {
           Alert.alert(
             "Check your email",
-            "Open the confirmation link sent to your email."
+            "Open the verification link sent to your email, then return and log in."
           );
+        } else {
+          Alert.alert("Welcome", "Your account has been created.");
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
-          password,
+          password
         });
-
         if (error) throw error;
       }
-    } catch (error) {
-      Alert.alert("Account message", error.message);
+    } catch (e) {
+      Alert.alert("Authentication", e.message || "Something went wrong.");
     } finally {
       setBusy(false);
     }
   }
 
-  async function logout() {
+  async function signOut() {
     await supabase.auth.signOut();
-    setBooks([]);
+    setSelected(null);
   }
 
-  async function chooseBookFile() {
+  async function chooseBook() {
     const result = await DocumentPicker.getDocumentAsync({
       type: [
         "application/pdf",
-        "application/msword",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "text/plain",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       ],
-      copyToCacheDirectory: true,
+      copyToCacheDirectory: true
     });
 
-    if (!result.canceled && result.assets?.length) {
-      setBookFile(result.assets[0]);
-    }
+    if (!result.canceled) setBookFile(result.assets[0]);
   }
 
   async function chooseCover() {
@@ -195,91 +126,68 @@ export default function App() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert("Permission", "Allow photo library access.");
-      return;
+      return Alert.alert(
+        "Permission needed",
+        "Allow photo access to choose a cover."
+      );
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
-      quality: 0.8,
+      quality: 0.8
     });
 
-    if (!result.canceled && result.assets?.length) {
-      setCover(result.assets[0]);
-    }
+    if (!result.canceled) setCoverFile(result.assets[0]);
   }
 
-  function getExtension(fileName) {
-    return fileName?.split(".").pop()?.toLowerCase() || "";
+  function safeName(name) {
+    return name.replace(/[^a-zA-Z0-9._-]/g, "_");
   }
 
-  async function uploadFile(file, path, contentType) {
-    const response = await fetch(file.uri);
+  async function uploadAsset(asset, folder) {
+    const response = await fetch(asset.uri);
     const blob = await response.blob();
 
+    const path = `${folder}/${Date.now()}-${safeName(
+      asset.name || asset.fileName || "upload"
+    )}`;
+
     const { error } = await supabase.storage
-      .from("novel-files")
+      .from(BUCKET)
       .upload(path, blob, {
-        contentType,
-        upsert: false,
+        contentType: asset.mimeType || "application/octet-stream",
+        upsert: false
       });
 
     if (error) throw error;
     return path;
   }
 
-  async function addBook() {
+  async function saveBook() {
     if (!isAdmin) {
-      Alert.alert("Access denied", "Only the administrator can add books.");
-      return;
+      return Alert.alert(
+        "Not allowed",
+        "Only the administrator can upload books."
+      );
     }
 
     if (!title.trim() || !author.trim() || !bookFile) {
-      Alert.alert(
-        "Missing information",
-        "Enter the title, author, and choose a book file."
+      return Alert.alert(
+        "Required",
+        "Enter the book title, author, and choose a book file."
       );
-      return;
-    }
-
-    if (isPaid && (!price.trim() || Number(price) <= 0)) {
-      Alert.alert("Price", "Enter a valid price.");
-      return;
     }
 
     setBusy(true);
-
     try {
-      const timestamp = Date.now();
-      const extension = getExtension(bookFile.name);
-      const safeTitle = title.trim().replace(/[^a-zA-Z0-9_-]/g, "_");
-      const filePath = `books/${timestamp}_${safeTitle}.${extension}`;
-
-      const contentTypes = {
-        pdf: "application/pdf",
-        doc: "application/msword",
-        docx:
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        txt: "text/plain",
-      };
-
-      await uploadFile(
-        bookFile,
-        filePath,
-        contentTypes[extension] || "application/octet-stream"
-      );
-
+      const filePath = await uploadAsset(bookFile, "books");
       let coverPath = null;
 
-      if (cover) {
-        coverPath = `covers/${timestamp}_cover.jpg`;
-
-        await uploadFile(
-          cover,
-          coverPath,
-          cover.mimeType || "image/jpeg"
-        );
+      if (coverFile) {
+        coverPath = await uploadAsset(coverFile, "covers");
       }
+
+      const ext = (bookFile.name || "").split(".").pop().toLowerCase();
 
       const { error } = await supabase.from("books").insert({
         title: title.trim(),
@@ -288,27 +196,29 @@ export default function App() {
         description: description.trim() || null,
         file_url: filePath,
         cover_image_url: coverPath,
-        file_type: extension,
-        is_paid: isPaid,
-        price: isPaid ? Number(price) : 0,
+        file_type: ext,
+        is_paid: paid,
+        price: paid ? Number(price) || 0 : 0
       });
 
       if (error) throw error;
 
-      Alert.alert("Success", "Book uploaded successfully.");
+      Alert.alert("Saved", "The book has been added to the library.");
 
       setTitle("");
       setAuthor("");
       setCategory("");
       setDescription("");
       setPrice("");
-      setIsPaid(false);
+      setPaid(false);
       setBookFile(null);
-      setCover(null);
-
+      setCoverFile(null);
       loadBooks();
-    } catch (error) {
-      Alert.alert("Upload failed", error.message);
+    } catch (e) {
+      Alert.alert(
+        "Upload failed",
+        e.message || "Could not upload this book."
+      );
     } finally {
       setBusy(false);
     }
@@ -316,93 +226,529 @@ export default function App() {
 
   async function openBook(book) {
     if (book.is_paid) {
-      Alert.alert(
+      return Alert.alert(
         "Paid book",
-        "Payment verification is not yet connected."
+        "This book is marked as paid. Payment verification and secure purchase access have not yet been connected."
       );
-      return;
     }
 
+    setBusy(true);
     try {
       const { data, error } = await supabase.storage
-        .from("novel-files")
+        .from(BUCKET)
         .createSignedUrl(book.file_url, 3600);
 
       if (error) throw error;
 
-      const extension = (
-        book.file_type || book.file_url.split(".").pop()
-      ).toLowerCase();
+      setSelected(book);
 
-      if (extension !== "pdf" && extension !== "txt") {
-        Alert.alert(
-          "Word document",
-          "DOC/DOCX needs conversion before it can be read inside the app."
-        );
-        return;
-      }
-
-      setReadingBook(book);
-      setPageNumber(1);
-      setTotalPages(0);
-      setReadingUrl(data.signedUrl);
-
-      if (extension === "txt") {
-        setTextLoading(true);
-
+      if ((book.file_type || "").toLowerCase() === "txt") {
         const response = await fetch(data.signedUrl);
-        const text = await response.text();
-
-        const words = text.split(/\s+/);
+        const raw = await response.text();
+        const words = raw.split(/\s+/);
         const pages = [];
-        const wordsPerPage = 450;
 
-        for (let i = 0; i < words.length; i += wordsPerPage) {
-          pages.push(words.slice(i, i + wordsPerPage).join(" "));
+        for (let i = 0; i < words.length; i += 450) {
+          pages.push(words.slice(i, i + 450).join(" "));
         }
 
-        setTextPages(pages.length ? pages : [""]);
-        setTotalPages(pages.length || 1);
-        setTextLoading(false);
+        setReaderText(pages.join("\n\n---PAGE---\n\n"));
+        setReaderPage(0);
+      } else if ((book.file_type || "").toLowerCase() === "pdf") {
+        setReaderUrl(data.signedUrl);
+      } else {
+        setSelected(null);
+        Alert.alert(
+          "Format not ready",
+          "DOC/DOCX files can be uploaded, but must be converted before in-app reading is available."
+        );
       }
-    } catch (error) {
-      setTextLoading(false);
-      setReadingBook(null);
-      Alert.alert("Unable to open book", error.message);
+    } catch (e) {
+      Alert.alert(
+        "Could not open book",
+        e.message || "Please try again."
+      );
+    } finally {
+      setBusy(false);
     }
   }
 
   function closeReader() {
-    setReadingBook(null);
-    setReadingUrl(null);
-    setTextPages([]);
-    setPageNumber(1);
-    setTotalPages(0);
+    setSelected(null);
+    setReaderUrl("");
+    setReaderText("");
+    setReaderPage(0);
   }
 
-  function changeTextPage(direction) {
-    setPageNumber((current) => {
-      const next = current + direction;
-
-      if (next < 1 || next > textPages.length) {
-        return current;
-      }
-
-      return next;
-    });
-  }
+  const textPages = readerText
+    ? readerText.split("\n\n---PAGE---\n\n")
+    : [];
 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#087A45" />
-        <Text style={styles.info}>Loading ASHMAN NOVEL LIBRARY...</Text>
+        <ActivityIndicator size="large" />
+        <Text>Loading ASHMAN NOVEL LIBRARY…</Text>
       </View>
     );
   }
 
   if (!session) {
     return (
+      <SafeAreaView style={styles.authPage}>
+        <StatusBar barStyle="dark-content" />
+        <Text style={styles.logo}>📖</Text>
+        <Text style={styles.mainTitle}>ASHMAN NOVEL LIBRARY</Text>
+        <Text style={styles.subTitle}>
+          Karatu mai armashi, a ko da yaushe
+        </Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder="Email address / Imel"
+          autoCapitalize="none"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Password / Kalmar sirri"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={authenticate}
+          disabled={busy}
+        >
+          <Text style={styles.buttonText}>
+            {busy
+              ? "Please wait…"
+              : isRegister
+              ? "Create account / Yi rajista"
+              : "Login / Shiga"}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity onPress={() => setIsRegister(!isRegister)}>
+          <Text style={styles.link}>
+            {isRegister
+              ? "Already registered? Login"
+              : "New here? Create an account"}
+          </Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  if (selected) {
+    return (
+      <SafeAreaView style={styles.reader}>
+        <View style={styles.readerHeader}>
+          <TouchableOpacity onPress={closeReader}>
+            <Text style={styles.link}>‹ Back</Text>
+          </TouchableOpacity>
+          <Text numberOfLines={1} style={styles.readerTitle}>
+            {selected.title}
+          </Text>
+        </View>
+
+        {(selected.file_type || "").toLowerCase() === "pdf" ? (
+          <Pdf
+            source={{ uri: readerUrl }}
+            horizontal
+            enablePaging
+            style={styles.pdf}
+            onError={e => Alert.alert("PDF error", String(e))}
+          />
+        ) : (
+          <View style={styles.textReader}>
+            <ScrollView>
+              <Text style={styles.pageText}>
+                {textPages[readerPage] || ""}
+              </Text>
+            </ScrollView>
+
+            <View style={styles.pageControls}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                disabled={readerPage === 0}
+                onPress={() =>
+                  setReaderPage(p => Math.max(0, p - 1))
+                }
+              >
+                <Text>Previous</Text>
+              </TouchableOpacity>
+
+              <Text>
+                Page {readerPage + 1} / {textPages.length}
+              </Text>
+
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                disabled={readerPage >= textPages.length - 1}
+                onPress={() =>
+                  setReaderPage(p =>
+                    Math.min(textPages.length - 1, p + 1)
+                  )
+                }
+              >
+                <Text>Next</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.page}>
+      <StatusBar barStyle="dark-content" />
+
+      <View style={styles.topBar}>
+        <View>
+          <Text style={styles.mainTitle}>ASHMAN NOVEL LIBRARY</Text>
+          <Text style={styles.subTitle}>
+            {isAdmin ? "Administrator" : "Your reading library"}
+          </Text>
+        </View>
+
+        <TouchableOpacity onPress={signOut}>
+          <Text style={styles.link}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+
+      {isAdmin && (
+        <ScrollView
+          style={styles.adminPanel}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.sectionTitle}>
+            Add a novel / Ɗora sabon littafi
+          </Text>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Book Title / Sunan littafi"
+            value={title}
+            onChangeText={setTitle}
+          />
+
+          <TextInput
+            style={styles.input}
+            placeholder="Author Name / Sunan marubuci"
+            value={author}
+            onChangeText={setAuthor}
+          />
+
+          <TextInput
+            style={styles.input}
+            placeholder="Category / Rukunin littafi (optional)"
+            value={category}
+            onChangeText={setCategory}
+          />
+
+          <TextInput
+            style={[styles.input, styles.multiline]}
+            placeholder="Book Description / Bayani (optional)"
+            value={description}
+            onChangeText={setDescription}
+            multiline
+          />
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={chooseBook}
+          >
+            <Text>
+              {bookFile
+                ? `Selected: ${bookFile.name}`
+                : "Choose PDF / DOC / DOCX / TXT"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={chooseCover}
+          >
+            <Text>
+              {coverFile
+                ? "Cover selected"
+                : "Choose cover image / Hoton littafi"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => setPaid(!paid)}
+          >
+            <Text>
+              {paid ? "Paid ✓" : "Free ✓"} (Tap to switch)
+            </Text>
+          </TouchableOpacity>
+
+          {paid && (
+            <TextInput
+              style={styles.input}
+              placeholder="Price (₦) / Farashi"
+              keyboardType="numeric"
+              value={price}
+              onChangeText={setPrice}
+            />
+          )}
+
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={saveBook}
+            disabled={busy}
+          >
+            <Text style={styles.buttonText}>
+              {busy ? "Saving…" : "Upload and save book"}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      )}
+
+      <View style={styles.libraryHeader}>
+        <Text style={styles.sectionTitle}>Library / Laburare</Text>
+        <TouchableOpacity onPress={loadBooks}>
+          <Text style={styles.link}>Refresh</Text>
+        </TouchableOpacity>
+      </View>
+
+      {busy && <ActivityIndicator />}
+
+      <FlatList
+        data={books}
+        keyExtractor={item => String(item.id)}
+        contentContainerStyle={styles.bookList}
+        ListEmptyComponent={
+          <Text style={styles.empty}>
+            No novels have been added yet.
+          </Text>
+        }
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.bookCard}
+            onPress={() => openBook(item)}
+          >
+            <View style={styles.cover}>
+              <Text style={styles.coverIcon}>📚</Text>
+            </View>
+
+            <View style={styles.bookInfo}>
+              <Text style={styles.bookTitle}>{item.title}</Text>
+              <Text style={styles.bookAuthor}>{item.author}</Text>
+
+              {!!item.category && (
+                <Text style={styles.muted}>{item.category}</Text>
+              )}
+
+              {!!item.description && (
+                <Text numberOfLines={2} style={styles.muted}>
+                  {item.description}
+                </Text>
+              )}
+
+              <Text style={styles.price}>
+                {item.is_paid ? `₦${item.price}` : "FREE"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  authPage: {
+    flex: 1,
+    backgroundColor: "#f7fbf8",
+    justifyContent: "center",
+    padding: 24
+  },
+  page: {
+    flex: 1,
+    backgroundColor: "#f7fbf8",
+    paddingTop: 12
+  },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center"
+  },
+  logo: {
+    fontSize: 58,
+    textAlign: "center",
+    marginBottom: 12
+  },
+  mainTitle: {
+    color: "#145c36",
+    fontSize: 21,
+    fontWeight: "bold"
+  },
+  subTitle: {
+    color: "#64756a",
+    marginTop: 4,
+    marginBottom: 18
+  },
+  input: {
+    backgroundColor: "#fff",
+    borderColor: "#d7e4da",
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 13,
+    marginVertical: 6,
+    color: "#17251b"
+  },
+  multiline: {
+    minHeight: 70,
+    textAlignVertical: "top"
+  },
+  primaryButton: {
+    backgroundColor: "#176b40",
+    borderRadius: 10,
+    padding: 15,
+    alignItems: "center",
+    marginVertical: 8
+  },
+  buttonText: {
+    color: "#fff",
+    fontWeight: "bold"
+  },
+  secondaryButton: {
+    backgroundColor: "#e9f2eb",
+    borderRadius: 9,
+    padding: 12,
+    marginVertical: 5,
+    alignItems: "center"
+  },
+  link: {
+    color: "#176b40",
+    fontWeight: "bold",
+    paddingVertical: 10
+  },
+  topBar: {
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  adminPanel: {
+    maxHeight: 360,
+    marginHorizontal: 14,
+    padding: 12,
+    backgroundColor: "#edf5ef",
+    borderRadius: 12
+  },
+  sectionTitle: {
+    color: "#164c30",
+    fontSize: 17,
+    fontWeight: "bold"
+  },
+  libraryHeader: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  bookList: {
+    paddingHorizontal: 14,
+    paddingBottom: 30
+  },
+  bookCard: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#e2ebe4"
+  },
+  cover: {
+    width: 62,
+    height: 82,
+    backgroundColor: "#e5f0e7",
+    borderRadius: 7,
+    justifyContent: "center",
+    alignItems: "center"
+  },
+  coverIcon: {
+    fontSize: 30
+  },
+  bookInfo: {
+    flex: 1,
+    marginLeft: 12
+  },
+  bookTitle: {
+    color: "#183c27",
+    fontWeight: "bold",
+    fontSize: 16
+  },
+  bookAuthor: {
+    color: "#55685b",
+    marginTop: 3
+  },
+  muted: {
+    color: "#77857a",
+    marginTop: 3,
+    fontSize: 12
+  },
+  price: {
+    color: "#176b40",
+    fontWeight: "bold",
+    marginTop: 5
+  },
+  empty: {
+    textAlign: "center",
+    color: "#748077",
+    marginTop: 30
+  },
+  reader: {
+    flex: 1,
+    backgroundColor: "#fff"
+  },
+  readerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    justifyContent: "space-between"
+  },
+  readerTitle: {
+    flex: 1,
+    textAlign: "right",
+    fontWeight: "bold",
+    color: "#173e29"
+  },
+  pdf: {
+    flex: 1,
+    width: "100%"
+  },
+  textReader: {
+    flex: 1,
+    padding: 18
+  },
+  pageText: {
+    fontSize: 17,
+    lineHeight: 29,
+    color: "#202820"
+  },
+  pageControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12
+  }
+});
+turn (
       <View style={styles.authPage}>
         <StatusBar style="dark" />
 
