@@ -10,10 +10,13 @@ import {
   Alert,
   ActivityIndicator,
   Linking,
+  Modal,
+  BackHandler,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
+import Pdf from "react-native-pdf";
 import { supabase } from "./supabase";
 
 const ADMIN_ID = "3d127987-ac50-4d49-9df8-fe8e52f1c67c";
@@ -34,8 +37,15 @@ export default function App() {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [isPaid, setIsPaid] = useState(false);
-  const [pdf, setPdf] = useState(null);
+  const [bookFile, setBookFile] = useState(null);
   const [cover, setCover] = useState(null);
+
+  const [readingBook, setReadingBook] = useState(null);
+  const [readingUrl, setReadingUrl] = useState(null);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [textPages, setTextPages] = useState([]);
+  const [textLoading, setTextLoading] = useState(false);
 
   const isAdmin = session?.user?.id === ADMIN_ID;
 
@@ -61,12 +71,9 @@ export default function App() {
       try {
         const parsed = new URL(url);
         const code = parsed.searchParams.get("code");
-
-        if (code) {
-          await supabase.auth.exchangeCodeForSession(code);
-        }
+        if (code) await supabase.auth.exchangeCodeForSession(code);
       } catch (error) {
-        console.log("Email verification link:", error);
+        console.log("Email verification:", error);
       }
     };
 
@@ -87,6 +94,20 @@ export default function App() {
     if (session) loadBooks();
   }, [session]);
 
+  useEffect(() => {
+    if (!readingBook) return;
+
+    const backListener = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        closeReader();
+        return true;
+      }
+    );
+
+    return () => backListener.remove();
+  }, [readingBook]);
+
   async function loadBooks() {
     const { data, error } = await supabase
       .from("books")
@@ -103,7 +124,7 @@ export default function App() {
 
   async function registerOrLogin() {
     if (!email.trim() || !password) {
-      Alert.alert("Required", "Please enter your email and password.");
+      Alert.alert("Required", "Enter your email and password.");
       return;
     }
 
@@ -129,7 +150,7 @@ export default function App() {
         if (!data.session) {
           Alert.alert(
             "Check your email",
-            "An email confirmation link has been sent. Open it to verify your account."
+            "Open the confirmation link sent to your email."
           );
         }
       } else {
@@ -148,19 +169,23 @@ export default function App() {
   }
 
   async function logout() {
-    const { error } = await supabase.auth.signOut();
-    if (error) Alert.alert("Error", error.message);
+    await supabase.auth.signOut();
     setBooks([]);
   }
 
-  async function choosePdf() {
+  async function chooseBookFile() {
     const result = await DocumentPicker.getDocumentAsync({
-      type: "application/pdf",
+      type: [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain",
+      ],
       copyToCacheDirectory: true,
     });
 
     if (!result.canceled && result.assets?.length) {
-      setPdf(result.assets[0]);
+      setBookFile(result.assets[0]);
     }
   }
 
@@ -169,7 +194,7 @@ export default function App() {
       await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert("Permission", "Please allow photo library access.");
+      Alert.alert("Permission", "Allow photo library access.");
       return;
     }
 
@@ -181,6 +206,10 @@ export default function App() {
     if (!result.canceled && result.assets?.length) {
       setCover(result.assets[0]);
     }
+  }
+
+  function getExtension(fileName) {
+    return fileName?.split(".").pop()?.toLowerCase() || "";
   }
 
   async function uploadFile(file, path, contentType) {
@@ -204,16 +233,16 @@ export default function App() {
       return;
     }
 
-    if (!title.trim() || !author.trim() || !pdf) {
+    if (!title.trim() || !author.trim() || !bookFile) {
       Alert.alert(
         "Missing information",
-        "Please enter the book title, author name, and select a PDF."
+        "Enter the title, author, and choose a book file."
       );
       return;
     }
 
     if (isPaid && (!price.trim() || Number(price) <= 0)) {
-      Alert.alert("Price", "Enter a valid price for this paid book.");
+      Alert.alert("Price", "Enter a valid price.");
       return;
     }
 
@@ -221,18 +250,27 @@ export default function App() {
 
     try {
       const timestamp = Date.now();
+      const extension = getExtension(bookFile.name);
       const safeTitle = title.trim().replace(/[^a-zA-Z0-9_-]/g, "_");
+      const filePath = `books/${timestamp}_${safeTitle}.${extension}`;
 
-      const pdfPath = `books/${timestamp}_${safeTitle}.pdf`;
+      const contentTypes = {
+        pdf: "application/pdf",
+        doc: "application/msword",
+        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        txt: "text/plain",
+      };
 
-      await uploadFile(pdf, pdfPath, "application/pdf");
+      await uploadFile(
+        bookFile,
+        filePath,
+        contentTypes[extension] || "application/octet-stream"
+      );
 
       let coverPath = null;
 
       if (cover) {
-        const extension = cover.uri.split(".").pop()?.split("?")[0] || "jpg";
-        coverPath = `covers/${timestamp}_cover.${extension}`;
-
+        coverPath = `covers/${timestamp}_cover.jpg`;
         await uploadFile(
           cover,
           coverPath,
@@ -245,16 +283,16 @@ export default function App() {
         author: author.trim(),
         category: category.trim() || null,
         description: description.trim() || null,
-        file_url: pdfPath,
+        file_url: filePath,
         cover_image_url: coverPath,
-        file_type: "pdf",
+        file_type: extension,
         is_paid: isPaid,
         price: isPaid ? Number(price) : 0,
       });
 
       if (error) throw error;
 
-      Alert.alert("Success", "The book has been added.");
+      Alert.alert("Success", "Book uploaded successfully.");
 
       setTitle("");
       setAuthor("");
@@ -262,9 +300,8 @@ export default function App() {
       setDescription("");
       setPrice("");
       setIsPaid(false);
-      setPdf(null);
+      setBookFile(null);
       setCover(null);
-
       loadBooks();
     } catch (error) {
       Alert.alert("Upload failed", error.message);
@@ -274,12 +311,10 @@ export default function App() {
   }
 
   async function openBook(book) {
-    if (!session) return;
-
     if (book.is_paid) {
       Alert.alert(
         "Paid book",
-        "Payment verification is not yet connected to this app."
+        "Payment verification is not yet connected."
       );
       return;
     }
@@ -287,14 +322,64 @@ export default function App() {
     try {
       const { data, error } = await supabase.storage
         .from("novel-files")
-        .createSignedUrl(book.file_url, 300);
+        .createSignedUrl(book.file_url, 3600);
 
       if (error) throw error;
 
-      await Linking.openURL(data.signedUrl);
+      const extension = (
+        book.file_type ||
+        book.file_url.split(".").pop()
+      ).toLowerCase();
+
+      setReadingBook(book);
+      setPageNumber(1);
+      setTotalPages(0);
+      setReadingUrl(data.signedUrl);
+
+      if (extension === "txt") {
+        setTextLoading(true);
+        const response = await fetch(data.signedUrl);
+        const text = await response.text();
+
+        const words = text.split(/\s+/);
+        const pages = [];
+        const wordsPerPage = 450;
+
+        for (let i = 0; i < words.length; i += wordsPerPage) {
+          pages.push(words.slice(i, i + wordsPerPage).join(" "));
+        }
+
+        setTextPages(pages.length ? pages : [""]);
+        setTotalPages(pages.length || 1);
+        setTextLoading(false);
+      } else if (extension !== "pdf") {
+        setReadingBook(null);
+        Alert.alert(
+          "Word document",
+          "An uploaded DOC/DOCX file needs conversion before it can be read page by page inside the app."
+        );
+      }
     } catch (error) {
+      setTextLoading(false);
+      setReadingBook(null);
       Alert.alert("Unable to open book", error.message);
     }
+  }
+
+  function closeReader() {
+    setReadingBook(null);
+    setReadingUrl(null);
+    setTextPages([]);
+    setPageNumber(1);
+    setTotalPages(0);
+  }
+
+  function changeTextPage(direction) {
+    setPageNumber((current) => {
+      const next = current + direction;
+      if (next < 1 || next > textPages.length) return current;
+      return next;
+    });
   }
 
   if (loading) {
@@ -310,7 +395,6 @@ export default function App() {
     return (
       <View style={styles.authPage}>
         <StatusBar style="dark" />
-
         <Text style={styles.logo}>📖</Text>
         <Text style={styles.mainTitle}>ASHMAN NOVEL LIBRARY</Text>
         <Text style={styles.subtitle}>S.Y MARUBUCI</Text>
@@ -383,10 +467,256 @@ export default function App() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {isAdmin ? (
+        {isAdmin && (
           <View style={styles.adminBox}>
             <Text style={styles.sectionTitle}>Admin Dashboard</Text>
-            <Text style={styles.info}>Welcome, Administrator.</Text>
+
+            <Text style={styles.label}>Book Title / Sunan littafi</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter book title"
+              value={title}
+              onChangeText={setTitle}
+            />
+
+            <Text style={styles.label}>Author Name / Sunan marubuci</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter author name"
+              value={author}
+              onChangeText={setAuthor}
+            />
+
+            <Text style={styles.label}>Category / Rukunin littafi</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Example: Romance"
+              value={category}
+              onChangeText={setCategory}
+            />
+
+            <Text style={styles.label}>
+              Book Description / Taƙaitaccen bayanin littafi
+            </Text>
+            <TextInput
+              style={[styles.input, styles.descriptionInput]}
+              placeholder="Write a short description"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+            />
+
+            <Text style={styles.label}>
+              Upload Book / Ɗora littafi (PDF, DOC, DOCX, TXT)
+            </Text>
+            <TouchableOpacity
+              style={styles.pickButton}
+              onPress={chooseBookFile}
+            >
+              <Text style={styles.pickText}>
+                {bookFile ? bookFile.name : "Choose book document"}
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.label}>
+              Cover Image / Hoton bangon littafi
+            </Text>
+            <TouchableOpacity style={styles.pickButton} onPress={chooseCover}>
+              <Text style={styles.pickText}>
+                {cover ? "Cover image selected" : "Choose cover image"}
+              </Text>
+            </TouchableOpacity>
+
+            <Text style={styles.label}>Book Type / Nau'in littafi</Text>
+            <View style={styles.typeRow}>
+              <TouchableOpacity
+                style={[styles.typeButton, !isPaid && styles.selectedType]}
+                onPress={() => setIsPaid(false)}
+              >
+                <Text style={styles.typeText}>Free / Kyauta</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.typeButton, isPaid && styles.selectedType]}
+                onPress={() => setIsPaid(true)}
+              >
+                <Text style={styles.typeText}>Paid / Na kuɗi</Text>
+              </TouchableOpacity>
+            </View>
+
+            {isPaid && (
+              <>
+                <Text style={styles.label}>Price (₦) / Farashi</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter price"
+                  value={price}
+                  onChangeText={setPrice}
+                  keyboardType="numeric"
+                />
+              </>
+            )}
+
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={addBook}
+              disabled={busy}
+            >
+              {busy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Upload Book</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <Text style={styles.sectionTitle}>Available Novels</Text>
+
+        {books.length === 0 ? (
+          <Text style={styles.info}>No books have been uploaded yet.</Text>
+        ) : (
+          books.map((book) => (
+            <View key={String(book.id)} style={styles.bookCard}>
+              <Text style={styles.bookTitle}>{book.title}</Text>
+              <Text style={styles.bookInfo}>Author: {book.author}</Text>
+
+              {!!book.category && (
+                <Text style={styles.bookInfo}>
+                  Category: {book.category}
+                </Text>
+              )}
+
+              {!!book.description && (
+                <Text style={styles.bookInfo}>{book.description}</Text>
+              )}
+
+              <Text style={styles.bookInfo}>
+                {book.is_paid ? `Paid: ₦${book.price}` : "Free"}
+              </Text>
+
+              <TouchableOpacity
+                style={styles.readButton}
+                onPress={() => openBook(book)}
+              >
+                <Text style={styles.buttonText}>
+                  {book.is_paid ? "View Book Details" : "Read Book"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
+      </ScrollView>
+
+      <Modal
+        visible={!!readingBook}
+        animationType="slide"
+        onRequestClose={closeReader}
+      >
+        <View style={styles.reader}>
+          <View style={styles.readerHeader}>
+            <TouchableOpacity onPress={closeReader}>
+              <Text style={styles.closeText}>✕ Close</Text>
+            </TouchableOpacity>
+            <Text style={styles.readerTitle} numberOfLines={1}>
+              {readingBook?.title}
+            </Text>
+            <Text style={styles.pageCount}>
+              {pageNumber} / {totalPages || "…"}
+            </Text>
+          </View>
+
+          {readingBook?.file_type === "txt" ? (
+            textLoading ? (
+              <ActivityIndicator
+                size="large"
+                color="#087A45"
+                style={styles.loadingReader}
+              />
+            ) : (
+              <View style={styles.textReader}>
+                <Text style={styles.readerText}>
+                  {textPages[pageNumber - 1] || ""}
+                </Text>
+
+                <View style={styles.pageButtons}>
+                  <TouchableOpacity
+                    style={styles.pageButton}
+                    onPress={() => changeTextPage(-1)}
+                  >
+                    <Text style={styles.buttonText}>Previous</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.pageButton}
+                    onPress={() => changeTextPage(1)}
+                  >
+                    <Text style={styles.buttonText}>Next</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )
+          ) : readingUrl ? (
+            <Pdf
+              source={{ uri: readingUrl }}
+              style={styles.pdf}
+              horizontal
+              enablePaging
+              page={pageNumber}
+              onPageChanged={(page, numberOfPages) => {
+                setPageNumber(page);
+                setTotalPages(numberOfPages);
+              }}
+              onLoadComplete={(numberOfPages) => {
+                setTotalPages(numberOfPages);
+              }}
+              onError={(error) => {
+                Alert.alert("PDF reader error", String(error));
+              }}
+              trustAllCerts={false}
+            />
+          ) : null}
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
+  },
+  authPage: {
+    flex: 1,
+    justifyContent: "center",
+    padding: 24,
+    backgroundColor: "#fff",
+  },
+  page: {
+    flex: 1,
+    backgroundColor: "#F5F7F5",
+  },
+  header: {
+    backgroundColor: "#087A45",
+    padding: 22,
+    paddingTop: 48,
+  },
+  headerTitle: {
+    color: "#fff",
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+  },
+  headerSubtitle: {
+    color: "#F5D77B",
+    textAlign: "center",
+    marginTop: 5,
+  },
+  logout: {
+    color: "#fff",
+    textAlign: "{styles.info}>Welcome, Administrator.</Text>
 
             <Text style={styles.label}>Book Title / Sunan littafi</Text>
             <TextInput
