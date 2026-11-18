@@ -819,7 +819,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingBottom: 30
   },
-  bookCard: {  bookCard: {
+    bookCard: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 14,
