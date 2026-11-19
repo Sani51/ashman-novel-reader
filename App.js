@@ -528,8 +528,16 @@ export default function App() {
 
         <Text style={styles.info}>
           Registration is free. Create an account to access the library.
-        </Text>
-      </SafeAreaView>
+                      <Text style={styles.price}>
+                {item.is_paid ? `₦${item.price}` : "FREE"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+    </SafeAreaView>
+  );
+}
     );
   }
 
