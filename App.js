@@ -774,43 +774,16 @@ export default function App() {
                 </Text>
               )}
 
-              <Text style={styles.input}
-          placeholder="Enter your password"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
-
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={authenticate}
-          disabled={busy}
-        >
-          {busy ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>
-              {isRegister ? "Register" : "Login"}
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setIsRegister(!isRegister)}
-          style={styles.switchButton}
-        >
-          <Text style={styles.switchText}>
-            {isRegister
-              ? "Already have an account? Login"
-              : "Don't have an account? Register"}
-          </Text>
-        </TouchableOpacity>
-
-        <Text style={styles.info}>
-          Registration is free. Create an account to access the library.
-        </Text>
-      </SafeAreaView>
-    );
+                            <Text style={styles.price}>
+                {item.is_paid ? `₦${item.price}` : "FREE"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+    </SafeAreaView>
+  );
+}
   }
 
   if (selected) {
