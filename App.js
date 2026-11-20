@@ -32,6 +32,8 @@ export default function App() {
   const [paid, setPaid] = useState(false);
   const [bookFile, setBookFile] = useState(null);
   const [coverFile, setCoverFile] = useState(null);
+  const [bulkFiles, setBulkFiles] = useState([]);
+  const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0, failed: 0 });
 
   const isAdmin = session?.user?.id === ADMIN_ID;
   const textPages = useMemo(
@@ -133,6 +135,84 @@ export default function App() {
     }
   }
 
+  async function chooseBulkBooks() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "text/plain", "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+        copyToCacheDirectory: true, multiple: true
+      });
+      if (!result.canceled && result.assets?.length) {
+        const valid = result.assets.filter(asset =>
+          ["pdf", "txt", "doc", "docx"].includes(getExtension(asset))
+        );
+        const rejected = result.assets.length - valid.length;
+        setBulkFiles(valid);
+        if (rejected) Alert.alert("Some files skipped", `${rejected} unsupported file(s) were not selected. Choose PDF, TXT, DOC or DOCX files.`);
+      }
+    } catch (e) {
+      Alert.alert("File selection failed", e?.message || "Could not select files.");
+    }
+  }
+
+  async function uploadBulkBooks() {
+    if (!isAdmin) {
+      Alert.alert("Not allowed", "Only the administrator can upload books.");
+      return;
+    }
+    if (!bulkFiles.length || !author.trim()) {
+      Alert.alert("Required details", "Select book files and enter the author name. The filename will be used as each book title.");
+      return;
+    }
+    if (paid && (!price.trim() || !Number.isFinite(Number(price)) || Number(price) <= 0)) {
+      Alert.alert("Price required", "Enter a valid price for the books.");
+      return;
+    }
+    setBusy(true);
+    const total = bulkFiles.length;
+    let done = 0;
+    let failed = 0;
+    setBulkProgress({ done: 0, total, failed: 0 });
+    const remaining = [];
+    try {
+      for (const asset of bulkFiles) {
+        let filePath = null;
+        const ext = getExtension(asset);
+        const filename = getFileName(asset);
+        const bookTitle = filename.replace(/\\.[^.]+$/, "").trim() || "Untitled book";
+        try {
+          const folder = ext === "pdf" ? "pdfs" : ext === "txt" ? "texts" : "documents";
+          filePath = await uploadAsset(asset, folder);
+          const { error } = await supabase.from("books").insert({
+            title: bookTitle, author: author.trim(),
+            category: category.trim() || null,
+            description: description.trim() || null,
+            file_url: filePath, cover_image_url: null,
+            file_type: ext, is_paid: paid, price: paid ? Number(price) : 0
+          });
+          if (error) throw error;
+        } catch (e) {
+          failed += 1;
+          remaining.push(asset);
+          if (filePath) {
+            try { await supabase.storage.from(BUCKET).remove([filePath]); } catch (_) {}
+          }
+        } finally {
+          done += 1;
+          setBulkProgress({ done, total, failed });
+        }
+      }
+      setBulkFiles(remaining);
+      await loadBooks();
+      Alert.alert(
+        failed ? "Bulk upload finished with errors" : "Bulk upload complete",
+        `${done - failed} book(s) uploaded successfully. ${failed} failed.${failed ? " Failed files remain selected so you can retry them." : ""}`
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function chooseCover() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -174,11 +254,11 @@ export default function App() {
   }
 
   async function uploadAsset(asset, folder) {
-    if (!asset?.uri) throw new Error("Ba a zaɓi fayil mai inganci ba.");
+    if (!asset?.uri) throw new Error("Please select a valid file.");
     const ext = getExtension(asset);
     const path = `${folder}/${Date.now()}-${safeName(getFileName(asset))}`;
     const response = await fetch(asset.uri);
-    if (!response.ok) throw new Error("An kasa karanta fayil ɗin daga wayarka.");
+    if (!response.ok) throw new Error("Could not read the selected file from your device.");
     const blob = await response.blob();
     const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
       contentType: getMimeType(asset, ext), upsert: false
@@ -240,7 +320,7 @@ export default function App() {
       return;
     }
     if (!book?.file_url || typeof book.file_url !== "string") {
-      Alert.alert("File missing", "Ba a samu hanyar fayil ɗin wannan littafi ba.");
+      Alert.alert("File missing", "The file path for this book is missing.");
       return;
     }
     const fileType = String(book.file_type || "").toLowerCase();
@@ -254,12 +334,12 @@ export default function App() {
       const { data, error } = await supabase.storage.from(BUCKET)
         .createSignedUrl(book.file_url, 3600);
       if (error) throw error;
-      if (!data?.signedUrl) throw new Error("Supabase bai samar da hanyar buɗe fayil ba.");
+      if (!data?.signedUrl) throw new Error("Supabase did not provide a file link.");
       if (fileType === "txt") {
         const response = await fetch(data.signedUrl);
-        if (!response.ok) throw new Error("An kasa sauke TXT daga Supabase.");
+        if (!response.ok) throw new Error("Could not download the TXT file from Supabase.");
         const rawText = await response.text();
-        if (!rawText.trim()) throw new Error("Wannan littafin babu rubutu a cikinsa.");
+        if (!rawText.trim()) throw new Error("This book contains no text.");
         const words = rawText.split(/\s+/);
         const pages = [];
         for (let i = 0; i < words.length; i += 450) {
@@ -297,10 +377,10 @@ export default function App() {
         <Text style={styles.mainTitle}>ASHMAN NOVEL LIBRARY</Text>
         <Text style={styles.subTitle}>S.Y MARUBUCI</Text>
         <Text style={styles.authTitle}>{isRegister ? "Create Account" : "Welcome Back"}</Text>
-        <Text style={styles.label}>Email Address / Adireshin Email</Text>
+        <Text style={styles.label}>Email Address</Text>
         <TextInput style={styles.input} placeholder="Enter your email" value={email}
           onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
-        <Text style={styles.label}>Password / Kalmar sirri</Text>
+        <Text style={styles.label}>Password</Text>
         <TextInput style={styles.input} placeholder="Enter your password" value={password}
           onChangeText={setPassword} secureTextEntry />
         <TouchableOpacity style={styles.primaryButton} onPress={authenticate} disabled={busy}>
@@ -362,14 +442,14 @@ export default function App() {
 
     {isAdmin && <ScrollView style={styles.adminPanel}
       contentContainerStyle={styles.adminContent} keyboardShouldPersistTaps="handled">
-      <Text style={styles.sectionTitle}>Add a novel / Ɗora sabon littafi</Text>
-      <TextInput style={styles.input} placeholder="Book Title / Sunan littafi"
+      <Text style={styles.sectionTitle}>Add a Book</Text>
+      <TextInput style={styles.input} placeholder="Book Title"
         value={title} onChangeText={setTitle} />
-      <TextInput style={styles.input} placeholder="Author Name / Sunan marubuci"
+      <TextInput style={styles.input} placeholder="Author Name"
         value={author} onChangeText={setAuthor} />
-      <TextInput style={styles.input} placeholder="Category / Rukunin littafi"
+      <TextInput style={styles.input} placeholder="Category"
         value={category} onChangeText={setCategory} />
-      <TextInput style={[styles.input, styles.multiline]} placeholder="Book Description / Bayani"
+      <TextInput style={[styles.input, styles.multiline]} placeholder="Book Description"
         value={description} onChangeText={setDescription} multiline />
       <TouchableOpacity style={styles.secondaryButton} onPress={chooseBook}>
         <Text style={styles.secondaryButtonText}>{bookFile ?
@@ -377,21 +457,36 @@ export default function App() {
       </TouchableOpacity>
       <TouchableOpacity style={styles.secondaryButton} onPress={chooseCover}>
         <Text style={styles.secondaryButtonText}>{coverFile ?
-          "Cover selected" : "Choose cover image / Hoton littafi"}</Text>
+          "Cover selected" : "Choose Cover Image"}</Text>
       </TouchableOpacity>
       <TouchableOpacity style={styles.secondaryButton} onPress={() => setPaid(v => !v)}>
         <Text style={styles.secondaryButtonText}>{paid ? "Paid ✓" : "Free ✓"} (Tap to switch)</Text>
       </TouchableOpacity>
-      {paid && <TextInput style={styles.input} placeholder="Price (₦) / Farashi"
+      {paid && <TextInput style={styles.input} placeholder="Price (₦)"
         keyboardType="numeric" value={price} onChangeText={setPrice} />}
       <TouchableOpacity style={styles.primaryButton} onPress={saveBook} disabled={busy}>
         {busy ? <ActivityIndicator color="#fff" /> :
           <Text style={styles.buttonText}>Upload and save book</Text>}
       </TouchableOpacity>
+      <View style={styles.bulkPanel}>
+        <Text style={styles.sectionTitle}>Bulk Book Upload</Text>
+        <Text style={styles.bulkHint}>Select multiple PDF, TXT, DOC or DOCX files. Each filename becomes the book title. The author, category, description and price above will apply to every selected book. Cover images can be added individually later.</Text>
+        <TouchableOpacity style={styles.secondaryButton} onPress={chooseBulkBooks} disabled={busy}>
+          <Text style={styles.secondaryButtonText}>{bulkFiles.length ? `${bulkFiles.length} file(s) selected` : "Select Multiple Book Files"}</Text>
+        </TouchableOpacity>
+        {bulkFiles.slice(0, 5).map((file, index) => (
+          <Text key={`${getFileName(file)}-${index}`} style={styles.bulkFile} numberOfLines={1}>• {getFileName(file)}</Text>
+        ))}
+        {bulkFiles.length > 5 && <Text style={styles.bulkFile}>And {bulkFiles.length - 5} more file(s)</Text>}
+        {bulkProgress.total > 0 && <Text style={styles.bulkHint}>Progress: {bulkProgress.done}/{bulkProgress.total} • Failed: {bulkProgress.failed}</Text>}
+        <TouchableOpacity style={styles.primaryButton} onPress={uploadBulkBooks} disabled={busy || !bulkFiles.length}>
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Upload All Selected Books</Text>}
+        </TouchableOpacity>
+      </View>
     </ScrollView>}
 
     <View style={styles.libraryHeader}>
-      <Text style={styles.sectionTitle}>Library / Laburare</Text>
+      <Text style={styles.sectionTitle}>Library</Text>
       <TouchableOpacity onPress={loadBooks}><Text style={styles.link}>Refresh</Text></TouchableOpacity>
     </View>
     {busy && <ActivityIndicator style={styles.listLoader} color="#176b40" />}
@@ -435,8 +530,11 @@ const styles = StyleSheet.create({
   topBar: { paddingHorizontal: 17, paddingVertical: 15, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#e4ebe6", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brandBlock: { flexShrink: 1 },
   link: { color: "#176b40", fontWeight: "800", fontSize: 14, padding: 5 },
-  adminPanel: { maxHeight: 330, backgroundColor: "#edf4ee", margin: 12, borderRadius: 12 },
+  adminPanel: { maxHeight: 520, backgroundColor: "#edf4ee", margin: 12, borderRadius: 12 },
   adminContent: { padding: 13 },
+  bulkPanel: { borderTopWidth: 1, borderTopColor: "#d3e0d6", marginTop: 8, paddingTop: 12 },
+  bulkHint: { color: "#627368", fontSize: 12, lineHeight: 18, marginTop: 7, marginBottom: 9 },
+  bulkFile: { color: "#355443", fontSize: 12, marginBottom: 4 },
   sectionTitle: { color: "#173b2a", fontSize: 17, fontWeight: "800" },
   secondaryButton: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#cbd9cf", borderRadius: 9, paddingVertical: 12, paddingHorizontal: 13, alignItems: "center", justifyContent: "center", marginBottom: 10 },
   secondaryButtonText: { color: "#294b37", fontWeight: "700", textAlign: "center", fontSize: 13 },
