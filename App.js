@@ -24,6 +24,14 @@ export default function App() {
   const [readerUrl, setReaderUrl] = useState("");
   const [readerText, setReaderText] = useState("");
   const [readerPage, setReaderPage] = useState(0);
+  const [readerTheme, setReaderTheme] = useState("light");
+  const [readerFontSize, setReaderFontSize] = useState(22);
+
+  const readerColors = {
+    light: { background: "#ffffff", text: "#202820", border: "#e5eae6", button: "#f0f3f1" },
+    dark: { background: "#111111", text: "#f4f4f4", border: "#444444", button: "#292929" },
+    grey: { background: "#d9d9d9", text: "#222222", border: "#b8b8b8", button: "#c8c8c8" }
+  }[readerTheme];
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
   const [category, setCategory] = useState("");
@@ -397,27 +405,52 @@ export default function App() {
   }
 
   if (selected) {
-    return <SafeAreaView style={styles.reader}>
-      <StatusBar barStyle="dark-content" />
-      <View style={styles.readerHeader}>
+    return <SafeAreaView style={[styles.reader, { backgroundColor: readerColors.background }]}>
+      <StatusBar barStyle={readerTheme === "dark" ? "light-content" : "dark-content"} />
+      <View style={[styles.readerHeader, { backgroundColor: readerColors.background, borderBottomColor: readerColors.border }]}>
         <TouchableOpacity onPress={closeReader}><Text style={styles.link}>‹ Back</Text></TouchableOpacity>
-        <Text numberOfLines={1} style={styles.readerTitle}>{selected.title}</Text>
+        <Text numberOfLines={1} style={[styles.readerTitle, { color: readerColors.text }]}>{selected.title}</Text>
+      </View>
+      <View style={[styles.readerTools, { backgroundColor: readerColors.background, borderBottomColor: readerColors.border }]}>
+        <Text style={[styles.readerToolLabel, { color: readerColors.text }]}>Reading theme</Text>
+        {[
+          { key: "light", label: "White" },
+          { key: "dark", label: "Black" },
+          { key: "grey", label: "Grey" }
+        ].map(option => (
+          <TouchableOpacity key={option.key}
+            onPress={() => setReaderTheme(option.key)}
+            style={[styles.themeButton, { backgroundColor: readerTheme === option.key ? "#176b40" : readerColors.button }]}>
+            <Text style={{ color: readerTheme === option.key ? "#ffffff" : readerColors.text, fontWeight: "700" }}>{option.label}</Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity style={[styles.fontButton, { backgroundColor: readerColors.button }]}
+          onPress={() => setReaderFontSize(size => Math.max(18, size - 1))}>
+          <Text style={{ color: readerColors.text, fontWeight: "900" }}>A−</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.fontButton, { backgroundColor: readerColors.button }]}
+          onPress={() => setReaderFontSize(size => Math.min(32, size + 1))}>
+          <Text style={{ color: readerColors.text, fontWeight: "900" }}>A+</Text>
+        </TouchableOpacity>
       </View>
       {String(selected.file_type || "").toLowerCase() === "pdf" ? (
-        readerUrl ? <Pdf key={readerUrl} source={{ uri: readerUrl }} trustAllCerts={false} horizontal enablePaging
-          style={styles.pdf} onError={e => Alert.alert("PDF error", String(e?.message || e))} /> :
-          <View style={styles.center}><Text>PDF URL is missing.</Text></View>
+        readerUrl ? <View style={{ flex: 1, backgroundColor: readerColors.background }}>
+          <Pdf key={readerUrl} source={{ uri: readerUrl }} trustAllCerts={false} horizontal enablePaging
+            style={[styles.pdf, { backgroundColor: readerColors.background }]}
+            onError={e => Alert.alert("PDF error", String(e?.message || e))} />
+        </View> :
+        <View style={styles.center}><Text>PDF URL is missing.</Text></View>
       ) : (
-        <View style={styles.textReader}>
+        <View style={[styles.textReader, { backgroundColor: readerColors.background }]}>
           <ScrollView contentContainerStyle={styles.textPageContent}>
-            <Text style={styles.pageText}>{textPages[readerPage] || ""}</Text>
+            <Text style={[styles.pageText, { color: readerColors.text, fontSize: readerFontSize, lineHeight: Math.round(readerFontSize * 1.65) }]}>{textPages[readerPage] || ""}</Text>
           </ScrollView>
-          <View style={styles.pageControls}>
+          <View style={[styles.pageControls, { backgroundColor: readerColors.background, borderTopColor: readerColors.border }]}>
             <TouchableOpacity style={[styles.secondaryButton, readerPage === 0 && styles.disabledButton]}
               disabled={readerPage === 0} onPress={() => setReaderPage(p => Math.max(0, p - 1))}>
               <Text style={styles.secondaryButtonText}>Previous</Text>
             </TouchableOpacity>
-            <Text style={styles.pageNumber}>Page {readerPage + 1} / {textPages.length}</Text>
+            <Text style={[styles.pageNumber, { color: readerColors.text }]}>Page {readerPage + 1} / {textPages.length}</Text>
             <TouchableOpacity style={[styles.secondaryButton,
               readerPage >= textPages.length - 1 && styles.disabledButton]}
               disabled={readerPage >= textPages.length - 1}
@@ -443,27 +476,41 @@ export default function App() {
     {isAdmin && <ScrollView style={styles.adminPanel}
       contentContainerStyle={styles.adminContent} keyboardShouldPersistTaps="handled">
       <Text style={styles.sectionTitle}>Add a Book</Text>
-      <TextInput style={styles.input} placeholder="Book Title"
+      <Text style={styles.fieldLabel}>Book Title</Text>\n      <Text style={styles.fieldHint}>Enter the full title of the novel.</Text>\n      
+      <TextInput style={styles.input} placeholder="Example: RAINA KAMA"
         value={title} onChangeText={setTitle} />
-      <TextInput style={styles.input} placeholder="Author Name"
+      <Text style={styles.fieldLabel}>Author Name</Text>\n      <Text style={styles.fieldHint}>Enter the writer's name exactly as it should appear.</Text>\n      
+      <TextInput style={styles.input} placeholder="Example: BILYN ABDULL"
         value={author} onChangeText={setAuthor} />
-      <TextInput style={styles.input} placeholder="Category"
+      <Text style={styles.fieldLabel}>Category</Text>\n      <Text style={styles.fieldHint}>Choose the book's subject or genre, such as Romance, History or Islamic.</Text>\n      
+      <TextInput style={styles.input} placeholder="Example: Romance"
         value={category} onChangeText={setCategory} />
-      <TextInput style={[styles.input, styles.multiline]} placeholder="Book Description"
+      <Text style={styles.fieldLabel}>Book Description</Text>\n      <Text style={styles.fieldHint}>Write a short summary to help readers understand the story.</Text>\n      
+      <TextInput style={[styles.input, styles.multiline]} placeholder="Write a short summary here..."
         value={description} onChangeText={setDescription} multiline />
+      <Text style={styles.fieldLabel}>Book File</Text>
+      <Text style={styles.fieldHint}>Select the actual novel document (PDF, DOC, DOCX or TXT).</Text>
       <TouchableOpacity style={styles.secondaryButton} onPress={chooseBook}>
         <Text style={styles.secondaryButtonText}>{bookFile ?
           `Selected: ${getFileName(bookFile)}` : "Choose PDF / DOC / DOCX / TXT"}</Text>
       </TouchableOpacity>
+      <Text style={styles.fieldLabel}>Cover Image</Text>
+      <Text style={styles.fieldHint}>Select the picture that will appear on the book card.</Text>
       <TouchableOpacity style={styles.secondaryButton} onPress={chooseCover}>
         <Text style={styles.secondaryButtonText}>{coverFile ?
           "Cover selected" : "Choose Cover Image"}</Text>
       </TouchableOpacity>
+      <Text style={styles.fieldLabel}>Book Access Type</Text>
+      <Text style={styles.fieldHint}>Choose Free for no charge, or Paid to set a selling price.</Text>
       <TouchableOpacity style={styles.secondaryButton} onPress={() => setPaid(v => !v)}>
         <Text style={styles.secondaryButtonText}>{paid ? "Paid ✓" : "Free ✓"} (Tap to switch)</Text>
       </TouchableOpacity>
-      {paid && <TextInput style={styles.input} placeholder="Price (₦)"
-        keyboardType="numeric" value={price} onChangeText={setPrice} />}
+      {paid && <>
+        <Text style={styles.fieldLabel}>Book Price (₦)</Text>
+        <Text style={styles.fieldHint}>Enter the amount readers must pay.</Text>
+        <TextInput style={styles.input} placeholder="Example: 1500"
+          keyboardType="numeric" value={price} onChangeText={setPrice} />
+      </>}
       <TouchableOpacity style={styles.primaryButton} onPress={saveBook} disabled={busy}>
         {busy ? <ActivityIndicator color="#fff" /> :
           <Text style={styles.buttonText}>Upload and save book</Text>}
@@ -532,6 +579,8 @@ const styles = StyleSheet.create({
   link: { color: "#176b40", fontWeight: "800", fontSize: 14, padding: 5 },
   adminPanel: { maxHeight: 520, backgroundColor: "#edf4ee", margin: 12, borderRadius: 12 },
   adminContent: { padding: 13 },
+  fieldLabel: { color: "#173b2a", fontSize: 15, fontWeight: "800", marginTop: 7, marginBottom: 3 },
+  fieldHint: { color: "#66776c", fontSize: 12, lineHeight: 17, marginBottom: 7 },
   bulkPanel: { borderTopWidth: 1, borderTopColor: "#d3e0d6", marginTop: 8, paddingTop: 12 },
   bulkHint: { color: "#627368", fontSize: 12, lineHeight: 18, marginTop: 7, marginBottom: 9 },
   bulkFile: { color: "#355443", fontSize: 12, marginBottom: 4 },
@@ -554,6 +603,10 @@ const styles = StyleSheet.create({
   reader: { flex: 1, backgroundColor: "#fff" },
   readerHeader: { minHeight: 54, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#e4ebe6" },
   readerTitle: { flex: 1, color: "#183b29", fontWeight: "800", fontSize: 15, marginLeft: 12 },
+  readerTools: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 7, paddingHorizontal: 10, paddingVertical: 9, borderBottomWidth: 1 },
+  readerToolLabel: { fontSize: 12, fontWeight: "800", marginRight: 2 },
+  themeButton: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  fontButton: { borderRadius: 8, minWidth: 38, alignItems: "center", paddingHorizontal: 9, paddingVertical: 8 },
   pdf: { flex: 1, width: "100%" },
   textReader: { flex: 1 },
   textPageContent: { padding: 20, paddingBottom: 40 },
