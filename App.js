@@ -404,7 +404,7 @@ export default function App() {
         <Text numberOfLines={1} style={styles.readerTitle}>{selected.title}</Text>
       </View>
       {String(selected.file_type || "").toLowerCase() === "pdf" ? (
-        readerUrl ? <Pdf key={readerUrl} source={{ uri: readerUrl }} horizontal enablePaging
+        readerUrl ? <Pdf key={readerUrl} source={{ uri: readerUrl }} trustAllCerts={false} horizontal enablePaging
           style={styles.pdf} onError={e => Alert.alert("PDF error", String(e?.message || e))} /> :
           <View style={styles.center}><Text>PDF URL is missing.</Text></View>
       ) : (
