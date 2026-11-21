@@ -442,7 +442,7 @@ export default function App() {
         <View style={styles.center}><Text>PDF URL is missing.</Text></View>
       ) : (
         <View style={[styles.textReader, { backgroundColor: readerColors.background }]}>
-          <ScrollView contentContainerStyle={styles.textPageContent}>
+          <ScrollView contentContainerStyle={[styles.textPageContent, { backgroundColor: readerColors.background }]}>
             <Text style={[styles.pageText, { color: readerColors.text, fontSize: readerFontSize, lineHeight: Math.round(readerFontSize * 1.65) }]}>{textPages[readerPage] || ""}</Text>
           </ScrollView>
           <View style={[styles.pageControls, { backgroundColor: readerColors.background, borderTopColor: readerColors.border }]}>
