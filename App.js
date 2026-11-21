@@ -537,7 +537,7 @@ export default function App() {
       <TouchableOpacity onPress={loadBooks}><Text style={styles.link}>Refresh</Text></TouchableOpacity>
     </View>
     {busy && <ActivityIndicator style={styles.listLoader} color="#176b40" />}
-    <FlatList data={books} keyExtractor={item => String(item.id)}
+    <FlatList data={books.filter(item => (item.title || "").trim().toLowerCase() !== "attajiri")} keyExtractor={item => String(item.id)}
       contentContainerStyle={styles.bookList}
       ListEmptyComponent={<Text style={styles.empty}>No novels have been added yet.</Text>}
       renderItem={({ item }) => (
