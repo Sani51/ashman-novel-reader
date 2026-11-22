@@ -182,6 +182,7 @@ export default function App() {
     let failed = 0;
     setBulkProgress({ done: 0, total, failed: 0 });
     const remaining = [];
+    const failureDetails = [];
     try {
       for (const asset of bulkFiles) {
         let filePath = null;
@@ -202,6 +203,7 @@ export default function App() {
         } catch (e) {
           failed += 1;
           remaining.push(asset);
+          failureDetails.push(`${filename}: ${e?.message || "Unknown upload error"}`);
           if (filePath) {
             try { await supabase.storage.from(BUCKET).remove([filePath]); } catch (_) {}
           }
@@ -214,7 +216,7 @@ export default function App() {
       await loadBooks();
       Alert.alert(
         failed ? "Bulk upload finished with errors" : "Bulk upload complete",
-        `${done - failed} book(s) uploaded successfully. ${failed} failed.${failed ? " Failed files remain selected so you can retry them." : ""}`
+        `${done - failed} book(s) uploaded successfully. ${failed} failed.${failed ? "\n\nDetails:\n" + failureDetails.slice(0, 3).join("\n") + (failed > 3 ? "\nMore errors not shown." : "") + "\n\nFailed files remain selected so you can retry them." : ""}`
       );
     } finally {
       setBusy(false);
