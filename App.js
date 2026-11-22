@@ -16,6 +16,7 @@ const REDIRECT_URL = "ashmannovellibrary://auth/callback";
 export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [introVisible, setIntroVisible] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isRegister, setIsRegister] = useState(false);
@@ -50,6 +51,11 @@ export default function App() {
     () => readerText ? readerText.split("\n\n---PAGE---\n\n") : [],
     [readerText]
   );
+
+  useEffect(() => {
+    const introTimer = setTimeout(() => setIntroVisible(false), 1800);
+    return () => clearTimeout(introTimer);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -382,6 +388,23 @@ export default function App() {
     setSelected(null); setReaderUrl(""); setReaderText(""); setReaderPage(0);
   }
 
+  if (introVisible) {
+    return <SafeAreaView style={styles.splashPage}>
+      <StatusBar barStyle="light-content" backgroundColor="#123d2b" />
+      <View style={styles.splashGlow} />
+      <View style={styles.splashLogoWrap}>
+        <Text style={styles.splashBook}>📖</Text>
+      </View>
+      <Text style={styles.splashTitle}>ASHMAN</Text>
+      <Text style={styles.splashTitleSecond}>NOVEL LIBRARY</Text>
+      <View style={styles.splashDivider} />
+      <Text style={styles.splashAuthor}>S.Y MARUBUCI</Text>
+      <Text style={styles.splashTagline}>A world of stories, one page at a time.</Text>
+      <ActivityIndicator style={styles.splashLoader} color="#e5c36a" size="small" />
+      <Text style={styles.splashFooter}>YOUR PERSONAL READING SPACE</Text>
+    </SafeAreaView>;
+  }
+
   if (loading) {
     return <View style={styles.center}>
       <ActivityIndicator size="large" color="#176b40" />
@@ -569,6 +592,17 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  splashPage: { flex: 1, backgroundColor: "#123d2b", alignItems: "center", justifyContent: "center", paddingHorizontal: 28, overflow: "hidden" },
+  splashGlow: { position: "absolute", width: 330, height: 330, borderRadius: 165, backgroundColor: "#1b5b3e", opacity: 0.55, top: "18%" },
+  splashLogoWrap: { width: 104, height: 104, borderRadius: 30, backgroundColor: "#f7f3e8", alignItems: "center", justifyContent: "center", marginBottom: 25, borderWidth: 3, borderColor: "#d8b45c", elevation: 10 },
+  splashBook: { fontSize: 55 },
+  splashTitle: { color: "#ffffff", fontSize: 31, fontWeight: "900", letterSpacing: 4 },
+  splashTitleSecond: { color: "#e5c36a", fontSize: 23, fontWeight: "800", letterSpacing: 2, marginTop: 2 },
+  splashDivider: { width: 62, height: 3, backgroundColor: "#e5c36a", borderRadius: 2, marginTop: 22, marginBottom: 14 },
+  splashAuthor: { color: "#ffffff", fontSize: 15, fontWeight: "800", letterSpacing: 3 },
+  splashTagline: { color: "#d8e6dc", fontSize: 12, marginTop: 13, letterSpacing: 0.4, textAlign: "center" },
+  splashLoader: { marginTop: 38 },
+  splashFooter: { position: "absolute", bottom: 34, color: "#a9c5b3", fontSize: 9, fontWeight: "700", letterSpacing: 2 },
   page: { flex: 1, backgroundColor: "#f6f8f5" },
   authPage: { flex: 1, backgroundColor: "#f6f8f5" },
   authContent: { flexGrow: 1, justifyContent: "center", padding: 24 },
