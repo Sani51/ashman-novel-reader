@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator, Alert, FlatList, SafeAreaView, ScrollView, StatusBar,
+  ActivityIndicator, Alert, FlatList, Keyboard, SafeAreaView, ScrollView, StatusBar,
   StyleSheet, Text, TextInput, TouchableOpacity, View
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -53,7 +53,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    const introTimer = setTimeout(() => setIntroVisible(false), 1800);
+    const introTimer = setTimeout(() => setIntroVisible(false), 8000);
     return () => clearTimeout(introTimer);
   }, []);
 
@@ -90,7 +90,9 @@ export default function App() {
       const { data, error } = await supabase.from("books").select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      setBooks(data || []);
+      const freshBooks = data || [];
+      setBooks(freshBooks);
+      return freshBooks;
     } catch (e) {
       Alert.alert("Library error", e?.message || "Could not load books.");
     }
@@ -184,6 +186,7 @@ export default function App() {
       Alert.alert("Price required", "Enter a valid price for the books.");
       return;
     }
+    Keyboard.dismiss();
     setBusy(true);
     const total = bulkFiles.length;
     let done = 0;
@@ -219,6 +222,7 @@ export default function App() {
           setBulkProgress({ done, total, failed });
         }
       }
+      Keyboard.dismiss();
       setBulkFiles(remaining);
       await loadBooks();
       Alert.alert(
@@ -550,7 +554,7 @@ export default function App() {
     </ScrollView>}
 
     <View style={styles.libraryHeader}>
-      <Text style={styles.sectionTitle}>Library</Text>
+      <Text style={styles.sectionTitle}>Library ({books.filter(item => (item.title || "").trim().toLowerCase() !== "attajiri").length})</Text>
       <TouchableOpacity onPress={loadBooks}><Text style={styles.link}>Refresh</Text></TouchableOpacity>
     </View>
     {busy && <ActivityIndicator style={styles.listLoader} color="#176b40" />}
