@@ -414,27 +414,40 @@ export default function App() {
 
   if (!session) {
     return <SafeAreaView style={styles.authPage}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#123d2b" />
       <ScrollView contentContainerStyle={styles.authContent} keyboardShouldPersistTaps="handled">
-        <Text style={styles.logo}>📖</Text>
-        <Text style={styles.mainTitle}>ASHMAN NOVEL LIBRARY</Text>
-        <Text style={styles.subTitle}>S.Y MARUBUCI</Text>
-        <Text style={styles.authTitle}>{isRegister ? "Create Account" : "Welcome Back"}</Text>
-        <Text style={styles.label}>Email Address</Text>
-        <TextInput style={styles.input} placeholder="Enter your email" value={email}
-          onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
-        <Text style={styles.label}>Password</Text>
-        <TextInput style={styles.input} placeholder="Enter your password" value={password}
-          onChangeText={setPassword} secureTextEntry />
-        <TouchableOpacity style={styles.primaryButton} onPress={authenticate} disabled={busy}>
-          {busy ? <ActivityIndicator color="#fff" /> :
-            <Text style={styles.buttonText}>{isRegister ? "Register" : "Login"}</Text>}
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setIsRegister(v => !v)} style={styles.switchButton}>
-          <Text style={styles.switchText}>{isRegister ?
-            "Already have an account? Login" : "Don't have an account? Register"}</Text>
-        </TouchableOpacity>
-        <Text style={styles.info}>Registration is free. Create an account to access the library.</Text>
+        <View style={styles.authHero}>
+          <View style={styles.authLogoBadge}><Text style={styles.authLogo}>📖</Text></View>
+          <Text style={styles.authBrand}>ASHMAN</Text>
+          <Text style={styles.authBrandSecond}>NOVEL LIBRARY</Text>
+          <View style={styles.authGoldLine} />
+          <Text style={styles.authByline}>A WORLD OF STORIES</Text>
+        </View>
+        <View style={styles.authCard}>
+          <Text style={styles.authEyebrow}>{isRegister ? "JOIN OUR READING COMMUNITY" : "WELCOME TO YOUR LIBRARY"}</Text>
+          <Text style={styles.authTitle}>{isRegister ? "Create your account" : "Welcome back"}</Text>
+          <Text style={styles.authDescription}>{isRegister
+            ? "Create a free account and discover your next favourite story."
+            : "Sign in to continue reading your favourite stories."}</Text>
+          <Text style={styles.label}>EMAIL ADDRESS</Text>
+          <TextInput style={styles.authInput} placeholder="name@example.com" placeholderTextColor="#98a69d"
+            value={email} onChangeText={setEmail} keyboardType="email-address"
+            autoCapitalize="none" autoCorrect={false} />
+          <Text style={styles.label}>PASSWORD</Text>
+          <TextInput style={styles.authInput} placeholder="Enter your password" placeholderTextColor="#98a69d"
+            value={password} onChangeText={setPassword} secureTextEntry />
+          <TouchableOpacity style={[styles.primaryButton, styles.authPrimaryButton]}
+            onPress={authenticate} disabled={busy} activeOpacity={0.88}>
+            {busy ? <ActivityIndicator color="#fff" /> :
+              <Text style={styles.buttonText}>{isRegister ? "CREATE ACCOUNT" : "SIGN IN"}</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setIsRegister(v => !v)} style={styles.switchButton}>
+            <Text style={styles.switchText}>{isRegister
+              ? "Already have an account? Sign in"
+              : "New here? Create a free account"}</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.authFooter}>By S.Y MARUBUCI  •  YOUR PERSONAL READING SPACE</Text>
       </ScrollView>
     </SafeAreaView>;
   }
@@ -604,8 +617,24 @@ const styles = StyleSheet.create({
   splashLoader: { marginTop: 38 },
   splashFooter: { position: "absolute", bottom: 34, color: "#a9c5b3", fontSize: 9, fontWeight: "700", letterSpacing: 2 },
   page: { flex: 1, backgroundColor: "#f6f8f5" },
-  authPage: { flex: 1, backgroundColor: "#f6f8f5" },
-  authContent: { flexGrow: 1, justifyContent: "center", padding: 24 },
+  authPage: { flex: 1, backgroundColor: "#123d2b" },
+  authContent: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 20, paddingTop: 24, paddingBottom: 18 },
+  authHero: { alignItems: "center", paddingTop: 12, paddingBottom: 25 },
+  authLogoBadge: { width: 70, height: 70, borderRadius: 23, backgroundColor: "#f7f3e8", borderWidth: 2, borderColor: "#e5c36a", alignItems: "center", justifyContent: "center", marginBottom: 13, elevation: 7 },
+  authLogo: { fontSize: 38 },
+  authBrand: { color: "#ffffff", fontSize: 27, fontWeight: "900", letterSpacing: 4 },
+  authBrandSecond: { color: "#e5c36a", fontSize: 18, fontWeight: "800", letterSpacing: 2, marginTop: 1 },
+  authGoldLine: { width: 42, height: 2, borderRadius: 2, backgroundColor: "#e5c36a", marginTop: 13, marginBottom: 9 },
+  authByline: { color: "#b9d0c1", fontSize: 9, fontWeight: "800", letterSpacing: 2 },
+  authCard: { backgroundColor: "#ffffff", borderRadius: 22, padding: 22, borderWidth: 1, borderColor: "#e5c36a", elevation: 8 },
+  authEyebrow: { color: "#a17b2d", fontSize: 9, fontWeight: "900", letterSpacing: 1.5 },
+  authTitle: { color: "#173b2a", fontSize: 25, fontWeight: "900", marginTop: 9 },
+  authDescription: { color: "#718078", fontSize: 13, lineHeight: 19, marginTop: 6, marginBottom: 18 },
+  label: { color: "#355443", fontSize: 11, fontWeight: "900", letterSpacing: 0.8, marginBottom: 7, marginTop: 10 },
+  authInput: { backgroundColor: "#f7faf7", borderWidth: 1, borderColor: "#dce7df", borderRadius: 12, minHeight: 50, paddingHorizontal: 14, paddingVertical: 12, color: "#17251d", marginBottom: 8, fontSize: 14 },
+  authPrimaryButton: { minHeight: 52, borderRadius: 12, marginTop: 15, marginBottom: 4 },
+  authFooter: { color: "#a9c5b3", fontSize: 9, fontWeight: "700", letterSpacing: 1, textAlign: "center", marginTop: 22, marginBottom: 8 },
+  authContentUnusedLegacy: { flexGrow: 1, justifyContent: "center", padding: 24 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff", padding: 24 },
   loadingText: { marginTop: 12, color: "#355443", fontSize: 14 },
   logo: { fontSize: 58, textAlign: "center", marginBottom: 10 },
