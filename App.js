@@ -482,7 +482,9 @@ export default function App() {
       </View>
       {String(selected.file_type || "").toLowerCase() === "pdf" ? (
         readerUrl ? <View style={{ flex: 1, backgroundColor: readerColors.background }}>
-          <Pdf key={readerUrl} source={{ uri: readerUrl }} trustAllCerts={false} scale={pdfScale} minScale={1} maxScale={3} horizontal enablePaging
+          <Pdf key={readerUrl} source={{ uri: readerUrl }} trustAllCerts={false}
+            scale={pdfScale} minScale={1} maxScale={3} fitPolicy={0}
+            horizontal={false} enablePaging={false}
             style={[styles.pdf, { backgroundColor: readerColors.background }]}
             onError={e => Alert.alert("PDF error", String(e?.message || e))} />
         </View> :
