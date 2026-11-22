@@ -6,6 +6,7 @@ import {
 import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import Pdf from "react-native-pdf";
+import RNBlobUtil from "react-native-blob-util";
 import { supabase } from "./supabase";
 
 const ADMIN_ID = "3d127987-ac50-4d49-9df8-fe8e52f1c67c";
@@ -268,10 +269,18 @@ export default function App() {
     if (!asset?.uri) throw new Error("Please select a valid file.");
     const ext = getExtension(asset);
     const path = `${folder}/${Date.now()}-${safeName(getFileName(asset))}`;
-    const response = await fetch(asset.uri);
-    if (!response.ok) throw new Error("Could not read the selected file from your device.");
-    const blob = await response.blob();
-    const { error } = await supabase.storage.from(BUCKET).upload(path, blob, {
+    let localPath = asset.uri;
+    if (localPath.startsWith("file://")) localPath = localPath.replace("file://", "");
+    let base64;
+    try {
+      base64 = await RNBlobUtil.fs.readFile(localPath, "base64");
+    } catch (readError) {
+      throw new Error("Could not read the selected file. Please choose it again and retry. " + (readError?.message || ""));
+    }
+    const binary = globalThis.atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const { error } = await supabase.storage.from(BUCKET).upload(path, bytes.buffer, {
       contentType: getMimeType(asset, ext), upsert: false
     });
     if (error) throw error;
