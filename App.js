@@ -199,7 +199,7 @@ export default function App() {
         let filePath = null;
         const ext = getExtension(asset);
         const filename = getFileName(asset);
-        const bookTitle = filename.replace(/\\.[^.]+$/, "").trim() || "Untitled book";
+        const bookTitle = filename.replace(/\.[^.]+$/, "").trim() || "Untitled book";
         try {
           const folder = ext === "pdf" ? "pdfs" : ext === "txt" ? "texts" : "documents";
           filePath = await uploadAsset(asset, folder);
