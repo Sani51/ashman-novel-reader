@@ -26,6 +26,7 @@ export default function App() {
   const [readerPage, setReaderPage] = useState(0);
   const [readerTheme, setReaderTheme] = useState("light");
   const [readerFontSize, setReaderFontSize] = useState(22);
+  const [pdfScale, setPdfScale] = useState(1);
 
   const readerColors = {
     light: { background: "#ffffff", text: "#202820", border: "#e5eae6", button: "#f0f3f1" },
@@ -427,17 +428,17 @@ export default function App() {
           </TouchableOpacity>
         ))}
         <TouchableOpacity style={[styles.fontButton, { backgroundColor: readerColors.button }]}
-          onPress={() => setReaderFontSize(size => Math.max(18, size - 1))}>
+          onPress={() => { setReaderFontSize(size => Math.max(12, size - 2)); setPdfScale(scale => Math.max(1, Number((scale - 0.2).toFixed(2)))); }}>
           <Text style={{ color: readerColors.text, fontWeight: "900" }}>A−</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.fontButton, { backgroundColor: readerColors.button }]}
-          onPress={() => setReaderFontSize(size => Math.min(32, size + 1))}>
+          onPress={() => { setReaderFontSize(size => Math.min(40, size + 2)); setPdfScale(scale => Math.min(3, Number((scale + 0.2).toFixed(2)))); }}>
           <Text style={{ color: readerColors.text, fontWeight: "900" }}>A+</Text>
         </TouchableOpacity>
       </View>
       {String(selected.file_type || "").toLowerCase() === "pdf" ? (
         readerUrl ? <View style={{ flex: 1, backgroundColor: readerColors.background }}>
-          <Pdf key={readerUrl} source={{ uri: readerUrl }} trustAllCerts={false} horizontal enablePaging
+          <Pdf key={readerUrl} source={{ uri: readerUrl }} trustAllCerts={false} scale={pdfScale} minScale={1} maxScale={3} horizontal enablePaging
             style={[styles.pdf, { backgroundColor: readerColors.background }]}
             onError={e => Alert.alert("PDF error", String(e?.message || e))} />
         </View> :
