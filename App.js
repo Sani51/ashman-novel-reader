@@ -176,8 +176,8 @@ export default function App() {
       Alert.alert("Not allowed", "Only the administrator can upload books.");
       return;
     }
-    if (!bulkFiles.length || !author.trim()) {
-      Alert.alert("Required details", "Select book files and enter the author name. The filename will be used as each book title.");
+    if (!bulkFiles.length) {
+      Alert.alert("Select books", "Choose one or more PDF, TXT, DOC or DOCX files first.");
       return;
     }
     if (paid && (!price.trim() || !Number.isFinite(Number(price)) || Number(price) <= 0)) {
@@ -201,9 +201,8 @@ export default function App() {
           const folder = ext === "pdf" ? "pdfs" : ext === "txt" ? "texts" : "documents";
           filePath = await uploadAsset(asset, folder);
           const { error } = await supabase.from("books").insert({
-            title: bookTitle, author: author.trim(),
-            category: category.trim() || null,
-            description: description.trim() || null,
+            title: bookTitle, author: null,
+            category: null, description: null,
             file_url: filePath, cover_image_url: null,
             file_type: ext, is_paid: paid, price: paid ? Number(price) : 0
           });
@@ -523,61 +522,29 @@ export default function App() {
 
     {isAdmin && <ScrollView style={styles.adminPanel}
       contentContainerStyle={styles.adminContent} keyboardShouldPersistTaps="handled">
-      <Text style={styles.sectionTitle}>Add a Book</Text>
-      <Text style={styles.fieldLabel}>Book Title</Text>\n      <Text style={styles.fieldHint}>Enter the full title of the novel.</Text>\n      
-      <TextInput style={styles.input} placeholder="Example: RAINA KAMA"
-        value={title} onChangeText={setTitle} />
-      <Text style={styles.fieldLabel}>Author Name</Text>\n      <Text style={styles.fieldHint}>Enter the writer's name exactly as it should appear.</Text>\n      
-      <TextInput style={styles.input} placeholder="Example: BILYN ABDULL"
-        value={author} onChangeText={setAuthor} />
-      <Text style={styles.fieldLabel}>Category</Text>\n      <Text style={styles.fieldHint}>Choose the book's subject or genre, such as Romance, History or Islamic.</Text>\n      
-      <TextInput style={styles.input} placeholder="Example: Romance"
-        value={category} onChangeText={setCategory} />
-      <Text style={styles.fieldLabel}>Book Description</Text>\n      <Text style={styles.fieldHint}>Write a short summary to help readers understand the story.</Text>\n      
-      <TextInput style={[styles.input, styles.multiline]} placeholder="Write a short summary here..."
-        value={description} onChangeText={setDescription} multiline />
-      <Text style={styles.fieldLabel}>Book File</Text>
-      <Text style={styles.fieldHint}>Select the actual novel document (PDF, DOC, DOCX or TXT).</Text>
-      <TouchableOpacity style={styles.secondaryButton} onPress={chooseBook}>
-        <Text style={styles.secondaryButtonText}>{bookFile ?
-          `Selected: ${getFileName(bookFile)}` : "Choose PDF / DOC / DOCX / TXT"}</Text>
+      <Text style={styles.sectionTitle}>Add Books</Text>
+      <Text style={styles.bulkHint}>Select as many novels as you want. The filename becomes each book title, and the file format is detected automatically.</Text>
+      <TouchableOpacity style={styles.secondaryButton} onPress={chooseBulkBooks} disabled={busy}>
+        <Text style={styles.secondaryButtonText}>{bulkFiles.length ? `${bulkFiles.length} book file(s) selected` : "Choose Book Files (PDF / TXT / DOC / DOCX)"}</Text>
       </TouchableOpacity>
-      <Text style={styles.fieldLabel}>Cover Image</Text>
-      <Text style={styles.fieldHint}>Select the picture that will appear on the book card.</Text>
-      <TouchableOpacity style={styles.secondaryButton} onPress={chooseCover}>
-        <Text style={styles.secondaryButtonText}>{coverFile ?
-          "Cover selected" : "Choose Cover Image"}</Text>
-      </TouchableOpacity>
-      <Text style={styles.fieldLabel}>Book Access Type</Text>
-      <Text style={styles.fieldHint}>Choose Free for no charge, or Paid to set a selling price.</Text>
-      <TouchableOpacity style={styles.secondaryButton} onPress={() => setPaid(v => !v)}>
-        <Text style={styles.secondaryButtonText}>{paid ? "Paid ✓" : "Free ✓"} (Tap to switch)</Text>
-      </TouchableOpacity>
-      {paid && <>
-        <Text style={styles.fieldLabel}>Book Price (₦)</Text>
-        <Text style={styles.fieldHint}>Enter the amount readers must pay.</Text>
-        <TextInput style={styles.input} placeholder="Example: 1500"
-          keyboardType="numeric" value={price} onChangeText={setPrice} />
-      </>}
-      <TouchableOpacity style={styles.primaryButton} onPress={saveBook} disabled={busy}>
-        {busy ? <ActivityIndicator color="#fff" /> :
-          <Text style={styles.buttonText}>Upload and save book</Text>}
-      </TouchableOpacity>
-      <View style={styles.bulkPanel}>
-        <Text style={styles.sectionTitle}>Bulk Book Upload</Text>
-        <Text style={styles.bulkHint}>Select multiple PDF, TXT, DOC or DOCX files. Each filename becomes the book title. The author, category, description and price above will apply to every selected book. Cover images can be added individually later.</Text>
-        <TouchableOpacity style={styles.secondaryButton} onPress={chooseBulkBooks} disabled={busy}>
-          <Text style={styles.secondaryButtonText}>{bulkFiles.length ? `${bulkFiles.length} file(s) selected` : "Select Multiple Book Files"}</Text>
+      {bulkFiles.slice(0, 6).map((file, index) => (
+        <Text key={`${getFileName(file)}-${index}`} style={styles.bulkFile} numberOfLines={1}>• {getFileName(file)}</Text>
+      ))}
+      {bulkFiles.length > 6 && <Text style={styles.bulkFile}>And {bulkFiles.length - 6} more file(s)</Text>}
+      <Text style={styles.fieldLabel}>Book Access</Text>
+      <View style={{ flexDirection: "row", gap: 10 }}>
+        <TouchableOpacity style={[styles.secondaryButton, { flex: 1, borderColor: !paid ? "#176b40" : "#cbd9cf", backgroundColor: !paid ? "#e5f1e8" : "#fff" }]} onPress={() => setPaid(false)}>
+          <Text style={styles.secondaryButtonText}>Free {!paid ? "✓" : ""}</Text>
         </TouchableOpacity>
-        {bulkFiles.slice(0, 5).map((file, index) => (
-          <Text key={`${getFileName(file)}-${index}`} style={styles.bulkFile} numberOfLines={1}>• {getFileName(file)}</Text>
-        ))}
-        {bulkFiles.length > 5 && <Text style={styles.bulkFile}>And {bulkFiles.length - 5} more file(s)</Text>}
-        {bulkProgress.total > 0 && <Text style={styles.bulkHint}>Progress: {bulkProgress.done}/{bulkProgress.total} • Failed: {bulkProgress.failed}</Text>}
-        <TouchableOpacity style={styles.primaryButton} onPress={uploadBulkBooks} disabled={busy || !bulkFiles.length}>
-          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Upload All Selected Books</Text>}
+        <TouchableOpacity style={[styles.secondaryButton, { flex: 1, borderColor: paid ? "#176b40" : "#cbd9cf", backgroundColor: paid ? "#e5f1e8" : "#fff" }]} onPress={() => setPaid(true)}>
+          <Text style={styles.secondaryButtonText}>Paid {paid ? "✓" : ""}</Text>
         </TouchableOpacity>
       </View>
+      {paid && <TextInput style={styles.input} placeholder="Price per book (₦)" keyboardType="numeric" value={price} onChangeText={setPrice} />}
+      {bulkProgress.total > 0 && <Text style={styles.bulkHint}>Progress: {bulkProgress.done}/{bulkProgress.total} • Failed: {bulkProgress.failed}</Text>}
+      <TouchableOpacity style={styles.primaryButton} onPress={uploadBulkBooks} disabled={busy || !bulkFiles.length}>
+        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Upload Selected Books</Text>}
+      </TouchableOpacity>
     </ScrollView>}
 
     <View style={styles.libraryHeader}>
