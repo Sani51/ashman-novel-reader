@@ -201,7 +201,7 @@ export default function App() {
           const folder = ext === "pdf" ? "pdfs" : ext === "txt" ? "texts" : "documents";
           filePath = await uploadAsset(asset, folder);
           const { error } = await supabase.from("books").insert({
-            title: bookTitle, author: null,
+            title: bookTitle, author: "S.Y MARUBUCI",
             category: null, description: null,
             file_url: filePath, cover_image_url: null,
             file_type: ext, is_paid: paid, price: paid ? Number(price) : 0
