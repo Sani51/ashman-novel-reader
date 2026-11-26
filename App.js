@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator, Alert, FlatList, Keyboard, SafeAreaView, ScrollView, StatusBar,
+  ActivityIndicator, Alert, FlatList, Keyboard, PanResponder, SafeAreaView, ScrollView, StatusBar,
   StyleSheet, Text, TextInput, TouchableOpacity, View
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -51,9 +51,20 @@ export default function App() {
     () => readerText ? readerText.split("\n\n---PAGE---\n\n") : [],
     [readerText]
   );
+  const textSwipeResponder = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_event, gesture) =>
+      Math.abs(gesture.dx) > 18 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.2,
+    onPanResponderRelease: (_event, gesture) => {
+      if (gesture.dx < -45) {
+        setReaderPage(page => Math.min(Math.max(textPages.length - 1, 0), page + 1));
+      } else if (gesture.dx > 45) {
+        setReaderPage(page => Math.max(0, page - 1));
+      }
+    }
+  }), [textPages.length]);
 
   useEffect(() => {
-    const introTimer = setTimeout(() => setIntroVisible(false), 8000);
+    const introTimer = setTimeout(() => setIntroVisible(false), 10000);
     return () => clearTimeout(introTimer);
   }, []);
 
@@ -488,13 +499,13 @@ export default function App() {
         readerUrl ? <View style={{ flex: 1, backgroundColor: readerColors.background }}>
           <Pdf key={readerUrl} source={{ uri: readerUrl }} trustAllCerts={false}
             scale={pdfScale} minScale={1} maxScale={3} fitPolicy={0}
-            horizontal={false} enablePaging={false}
+            horizontal={true} enablePaging={true}
             style={[styles.pdf, { backgroundColor: readerColors.background }]}
             onError={e => Alert.alert("PDF error", String(e?.message || e))} />
         </View> :
         <View style={styles.center}><Text>PDF URL is missing.</Text></View>
       ) : (
-        <View style={[styles.textReader, { backgroundColor: readerColors.background }]}>
+        <View style={[styles.textReader, { backgroundColor: readerColors.background }]} {...textSwipeResponder.panHandlers}>
           <ScrollView contentContainerStyle={[styles.textPageContent, { backgroundColor: readerColors.background }]}>
             <Text style={[styles.pageText, { color: readerColors.text, fontSize: readerFontSize, lineHeight: Math.round(readerFontSize * 1.65) }]}>{textPages[readerPage] || ""}</Text>
           </ScrollView>
@@ -622,7 +633,7 @@ const styles = StyleSheet.create({
   switchButton: { alignItems: "center", padding: 12 },
   switchText: { color: "#176b40", fontWeight: "700", textAlign: "center" },
   info: { color: "#718078", textAlign: "center", fontSize: 12, marginTop: 18, lineHeight: 18 },
-  topBar: { paddingHorizontal: 17, paddingVertical: 15, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#e4ebe6", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  topBar: { paddingHorizontal: 17, paddingTop: 25, paddingBottom: 15, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#e4ebe6", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   brandBlock: { flexShrink: 1 },
   link: { color: "#176b40", fontWeight: "800", fontSize: 14, padding: 5 },
   adminPanel: { maxHeight: 520, backgroundColor: "#edf4ee", margin: 12, borderRadius: 12 },
@@ -649,7 +660,7 @@ const styles = StyleSheet.create({
   muted: { color: "#6f7d74", fontSize: 12, marginTop: 2 },
   price: { color: "#176b40", fontSize: 13, fontWeight: "900", marginTop: 7 },
   reader: { flex: 1, backgroundColor: "#fff" },
-  readerHeader: { minHeight: 54, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#e4ebe6" },
+  readerHeader: { minHeight: 66, paddingHorizontal: 12, paddingTop: 10, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "#e4ebe6" },
   readerTitle: { flex: 1, color: "#183b29", fontWeight: "800", fontSize: 15, marginLeft: 12 },
   readerTools: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 7, paddingHorizontal: 10, paddingVertical: 9, borderBottomWidth: 1 },
   readerToolLabel: { fontSize: 12, fontWeight: "800", marginRight: 2 },
