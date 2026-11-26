@@ -353,6 +353,43 @@ export default function App() {
     }
   }
 
+  function confirmDeleteBook(book) {
+    if (!isAdmin) {
+      Alert.alert("Not allowed", "Only the administrator can delete books.");
+      return;
+    }
+    Alert.alert(
+      "Delete this book?",
+      `“${book?.title || "Untitled book"}” will be removed from the library. This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete", style: "destructive", onPress: () => deleteBook(book) }
+      ]
+    );
+  }
+
+  async function deleteBook(book) {
+    if (!isAdmin || !book?.id) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase.from("books").delete().eq("id", book.id);
+      if (error) throw error;
+      const paths = [book.file_url, book.cover_image_url]
+        .filter(path => typeof path === "string" && path.trim());
+      let storageWarning = "";
+      if (paths.length) {
+        const { error: storageError } = await supabase.storage.from(BUCKET).remove(paths);
+        if (storageError) storageWarning = "\\nThe book was removed from the library, but its stored file could not be deleted.";
+      }
+      setBooks(current => current.filter(item => item.id !== book.id));
+      Alert.alert("Deleted", `“${book.title || "Book"}” has been removed.${storageWarning}`);
+    } catch (e) {
+      Alert.alert("Delete failed", e?.message || "Could not delete this book.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function openBook(book) {
     if (book?.is_paid) {
       Alert.alert("Paid book",
@@ -574,16 +611,24 @@ export default function App() {
       contentContainerStyle={styles.bookList}
       ListEmptyComponent={<Text style={styles.empty}>No novels have been added yet.</Text>}
       renderItem={({ item }) => (
-        <TouchableOpacity style={styles.bookCard} onPress={() => openBook(item)} disabled={busy}>
-          <View style={styles.cover}><Text style={styles.coverIcon}>📚</Text></View>
-          <View style={styles.bookInfo}>
-            <Text style={styles.bookTitle}>{item.title || "Untitled book"}</Text>
-            <Text style={styles.bookAuthor}>{item.author || "Unknown author"}</Text>
-            {!!item.category && <Text style={styles.muted}>{item.category}</Text>}
-            {!!item.description && <Text numberOfLines={2} style={styles.muted}>{item.description}</Text>}
-            <Text style={styles.price}>{item.is_paid ? `₦${item.price}` : "FREE"}</Text>
-          </View>
-        </TouchableOpacity>
+        <View style={styles.bookCard}>
+          <TouchableOpacity style={styles.bookOpenArea} onPress={() => openBook(item)} disabled={busy}>
+            <View style={styles.cover}><Text style={styles.coverIcon}>📚</Text></View>
+            <View style={styles.bookInfo}>
+              <Text style={styles.bookTitle}>{item.title || "Untitled book"}</Text>
+              <Text style={styles.bookAuthor}>{item.author || "Unknown author"}</Text>
+              {!!item.category && <Text style={styles.muted}>{item.category}</Text>}
+              {!!item.description && <Text numberOfLines={2} style={styles.muted}>{item.description}</Text>}
+              <Text style={styles.price}>{item.is_paid ? `₦${item.price}` : "FREE"}</Text>
+            </View>
+          </TouchableOpacity>
+          {isAdmin && (
+            <TouchableOpacity style={styles.deleteBookButton}
+              onPress={() => confirmDeleteBook(item)} disabled={busy}>
+              <Text style={styles.deleteBookText}>Delete book</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       )}
     />
   </SafeAreaView>;
@@ -654,7 +699,10 @@ const styles = StyleSheet.create({
   listLoader: { marginVertical: 8 },
   bookList: { padding: 12, paddingBottom: 30, flexGrow: 1 },
   empty: { textAlign: "center", color: "#7b8980", marginTop: 35 },
-  bookCard: { flexDirection: "row", backgroundColor: "#fff", borderRadius: 12, padding: 12, marginBottom: 11, borderWidth: 1, borderColor: "#e3ebe5" },
+  bookCard: { backgroundColor: "#fff", borderRadius: 12, padding: 12, marginBottom: 11, borderWidth: 1, borderColor: "#e3ebe5" },
+  bookOpenArea: { flexDirection: "row" },
+  deleteBookButton: { alignSelf: "flex-end", marginTop: 8, paddingHorizontal: 13, paddingVertical: 8, borderRadius: 8, backgroundColor: "#fff0f0", borderWidth: 1, borderColor: "#e7b8b8" },
+  deleteBookText: { color: "#b42318", fontWeight: "800", fontSize: 12 },
   cover: { width: 65, height: 88, borderRadius: 8, backgroundColor: "#e7f0e8", alignItems: "center", justifyContent: "center", marginRight: 12 },
   coverIcon: { fontSize: 30 },
   bookInfo: { flex: 1, justifyContent: "center" },
