@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator, Alert, FlatList, Keyboard, PanResponder, SafeAreaView, ScrollView, StatusBar,
+  ActivityIndicator, Alert, FlatList, Image, Keyboard, PanResponder, SafeAreaView, ScrollView, StatusBar,
   StyleSheet, Text, TextInput, TouchableOpacity, View
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -406,9 +406,7 @@ export default function App() {
     return <SafeAreaView style={styles.splashPage}>
       <StatusBar barStyle="light-content" backgroundColor="#123d2b" />
       <View style={styles.splashGlow} />
-      <View style={styles.splashLogoWrap}>
-        <Text style={styles.splashBook}>📖</Text>
-      </View>
+      <Image source={require("./assets/ashman-novel-library-icon.png")} style={styles.splashLogoImage} resizeMode="contain" />
       <Text style={styles.splashTitle}>ASHMAN</Text>
       <Text style={styles.splashTitleSecond}>NOVEL LIBRARY</Text>
       <View style={styles.splashDivider} />
@@ -431,7 +429,7 @@ export default function App() {
       <StatusBar barStyle="light-content" backgroundColor="#123d2b" />
       <ScrollView contentContainerStyle={styles.authContent} keyboardShouldPersistTaps="handled">
         <View style={styles.authHero}>
-          <View style={styles.authLogoBadge}><Text style={styles.authLogo}>📖</Text></View>
+          <Image source={require("./assets/ashman-novel-library-icon.png")} style={styles.authLogoImage} resizeMode="contain" />
           <Text style={styles.authBrand}>ASHMAN</Text>
           <Text style={styles.authBrandSecond}>NOVEL LIBRARY</Text>
           <View style={styles.authGoldLine} />
@@ -531,8 +529,11 @@ export default function App() {
     <StatusBar barStyle="dark-content" />
     <View style={styles.topBar}>
       <View style={styles.brandBlock}>
-        <Text style={styles.mainTitle}>ASHMAN NOVEL LIBRARY</Text>
-        <Text style={styles.subTitle}>{isAdmin ? "Administrator" : "Your reading library"}</Text>
+        <Image source={require("./assets/ashman-novel-library-icon.png")} style={styles.headerLogo} resizeMode="contain" />
+        <View style={styles.brandTextBlock}>
+          <Text style={styles.mainTitle}>ASHMAN NOVEL LIBRARY</Text>
+          <Text style={styles.subTitle}>{isAdmin ? "Administrator" : "Your reading library"}</Text>
+        </View>
       </View>
       <TouchableOpacity onPress={signOut}><Text style={styles.link}>Logout</Text></TouchableOpacity>
     </View>
@@ -591,7 +592,7 @@ export default function App() {
 const styles = StyleSheet.create({
   splashPage: { flex: 1, backgroundColor: "#123d2b", alignItems: "center", justifyContent: "center", paddingHorizontal: 28, overflow: "hidden" },
   splashGlow: { position: "absolute", width: 330, height: 330, borderRadius: 165, backgroundColor: "#1b5b3e", opacity: 0.55, top: "18%" },
-  splashLogoWrap: { width: 104, height: 104, borderRadius: 30, backgroundColor: "#f7f3e8", alignItems: "center", justifyContent: "center", marginBottom: 25, borderWidth: 3, borderColor: "#d8b45c", elevation: 10 },
+  splashLogoImage: { width: 150, height: 150, borderRadius: 28, marginBottom: 18 },
   splashBook: { fontSize: 55 },
   splashTitle: { color: "#ffffff", fontSize: 31, fontWeight: "900", letterSpacing: 4 },
   splashTitleSecond: { color: "#e5c36a", fontSize: 23, fontWeight: "800", letterSpacing: 2, marginTop: 2 },
@@ -604,7 +605,7 @@ const styles = StyleSheet.create({
   authPage: { flex: 1, backgroundColor: "#123d2b" },
   authContent: { flexGrow: 1, justifyContent: "center", paddingHorizontal: 20, paddingTop: 24, paddingBottom: 18 },
   authHero: { alignItems: "center", paddingTop: 12, paddingBottom: 25 },
-  authLogoBadge: { width: 70, height: 70, borderRadius: 23, backgroundColor: "#f7f3e8", borderWidth: 2, borderColor: "#e5c36a", alignItems: "center", justifyContent: "center", marginBottom: 13, elevation: 7 },
+  authLogoImage: { width: 82, height: 82, borderRadius: 18, marginBottom: 13 },
   authLogo: { fontSize: 38 },
   authBrand: { color: "#ffffff", fontSize: 27, fontWeight: "900", letterSpacing: 4 },
   authBrandSecond: { color: "#e5c36a", fontSize: 18, fontWeight: "800", letterSpacing: 2, marginTop: 1 },
@@ -634,7 +635,9 @@ const styles = StyleSheet.create({
   switchText: { color: "#176b40", fontWeight: "700", textAlign: "center" },
   info: { color: "#718078", textAlign: "center", fontSize: 12, marginTop: 18, lineHeight: 18 },
   topBar: { paddingHorizontal: 17, paddingTop: 25, paddingBottom: 15, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#e4ebe6", flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  brandBlock: { flexShrink: 1 },
+  brandBlock: { flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 },
+  brandTextBlock: { flexShrink: 1 },
+  headerLogo: { width: 42, height: 42, borderRadius: 8 },
   link: { color: "#176b40", fontWeight: "800", fontSize: 14, padding: 5 },
   adminPanel: { maxHeight: 520, backgroundColor: "#edf4ee", margin: 12, borderRadius: 12 },
   adminContent: { padding: 13 },
